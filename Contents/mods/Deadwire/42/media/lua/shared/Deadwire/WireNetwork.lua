@@ -192,19 +192,37 @@ end
 
 -----------------------------------------------------------
 -- Cooldown
+--
+-- Measured in real seconds (os.time), not game hours. The cooldown exists to
+-- stop one zombie crowd spamming the same alarm, which is a real-time problem:
+-- under game time the same config number meant a different real duration on
+-- every server, and at the default day length 36 game-seconds worked out to
+-- about 1.5 real seconds -- shorter than Detection's own dedup window, so the
+-- cooldown did essentially nothing. Fixes #16.
+--
+-- Detection.lua already uses os.time() for its dedup window, so both clocks in
+-- this mod now agree.
 -----------------------------------------------------------
 
 function DeadwireNetwork.isOnCooldown(x, y, z)
     local entry = tileIndex[DeadwireNetwork.tileKey(x, y, z)]
     if not entry or entry.cooldownUntil <= 0 then return false end
-    return getGameTime():getWorldAgeHours() < entry.cooldownUntil
+    return os.time() < entry.cooldownUntil
 end
 
-function DeadwireNetwork.setCooldown(x, y, z, durationHours)
+-- Returns the duration actually applied, or nil if there is no such tile, so
+-- the server can tell clients how long to mirror it for.
+--
+-- Deliberately a duration and not an absolute expiry: server and clients are
+-- different machines, and while os.time() is UTC epoch (so timezone is not a
+-- factor) their wall clocks can still be skewed. Each side adds the duration
+-- to its own clock, which costs network latency in accuracy and is immune to
+-- skew -- the far worse error.
+function DeadwireNetwork.setCooldown(x, y, z, durationSeconds)
     local entry = tileIndex[DeadwireNetwork.tileKey(x, y, z)]
-    if entry then
-        entry.cooldownUntil = getGameTime():getWorldAgeHours() + durationHours
-    end
+    if not entry then return nil end
+    entry.cooldownUntil = os.time() + durationSeconds
+    return durationSeconds
 end
 
 -----------------------------------------------------------

@@ -3,10 +3,10 @@
 ```yaml
 project: Deadwire
 description: PZ mod — perimeter trip lines and electric fencing for Project Zomboid (B42+)
-last_session: 16
+last_session: 17
 last_updated: 2026-08-05
-continue_with: "Fix #17 and #18 (one-liners, revives the whole camouflage system), then #14/#15/#16, then finish the in-game smoke test"
-blockers: "World sprite ART is placeholder. The deadwire_01 tilesheet ships and is declared in mod.info, so sprites should load, but the 8 images are Session 10 placeholders, not the finished Gemini art. Whether they render at all is still unverified in-game."
+continue_with: "In-game smoke test: sprites load, recipes registered, loot reachable, sounds play, camo now visible/degrading. All five code bugs (#14-#18) are fixed and merged."
+blockers: "World sprite ART is placeholder. The deadwire_01 tilesheet ships, is declared in mod.info, and its 8 tile indices now provably match the names Config.Sprites asks for (verify_names.py checks this), so the sprites should load and the construction_01_24 fallback should never fire. The 8 images themselves are still Session 10 placeholders, not the finished Gemini art, and nothing has been confirmed rendering in-game."
 
 tech:
   stack: pz-lua-mod
@@ -42,13 +42,54 @@ workflow:
 7. **Detection is CLIENT-side**: OnZombieUpdate/OnPlayerUpdate are client events
 8. **No guards around unverified API names.** A guard around a typo is indistinguishable from a guard around a real fallback: it turns a loud error into a silently absent feature. This cost three dead features, found in Session 16.
 
-## Verified against the installed 42.20 jar (Session 16)
+## Name verification: run the script, do not check by hand
 
-Confirmed to EXIST: `setStaggerBack`, `knockDown`, `setAlphaAndTarget`, `getWorldSoundManager`, `PlayWorldSound`, `IsoObject:setOutlineHighlight`, `setOutlineHighlightCol`, `isAdmin`, `BodyPartType.Foot_L`, `IsoThumpable`, `ISBuildingObject`, `ProceduralDistributions`, `IsoGridSquare:isGeneratorPoweringSquare`.
+```bash
+python scripts/verify_names.py          # exit 0 = every name resolves
+```
 
-Confirmed NOT to exist: `Perks.Foraging` (it is `PlantScavenging`), `Perks.Carpentry` (it is `Woodwork`), `Capability.CanBuildAnywhere` (nearest real: `UseBuildCheat`), the `Climate` global (it is `getClimateManager()`), `getRainStrength` (it is `getRainIntensity`), `Base.TreeBranch` (it is `TreeBranch2`). There is **no electrocution system anywhere in the jar**.
+`scripts/verify_names.py` resolves every game name the mod references against the
+installed 42.20 install: `Perks.X`, `Capability.X`, `BodyPartType.X`, `Base.X` item
+ids in both Lua and scripts, `ProceduralDistributions` names, recipe
+`SkillRequired`/`xpAward` perks, `Icon =` PNG existence, sprite names against the
+mod's own tilesheet, and root-vs-42 `mod.info` agreement. 67 references at present.
+`scripts/pzclass.py` is the Java `.class` reader underneath it.
 
-Technique: parse the constant pool of each `.class` in `projectzomboid.jar` — zip read, walk the pool, take tag-1 UTF8 entries. ~142k identifiers in seconds. Do NOT substring-match against the vanilla Lua tree: that passes `Perks.Foraging` as valid because the word appears elsewhere.
+**This exists because checking by hand does not hold.** Session 16 found six name
+bugs manually and wrote the technique into this file without committing a tool. The
+very next name written by hand — `ChurchMisc` → `ChurchStorageMisc` — was also wrong
+and was committed described as "verified against vanilla ProceduralDistributions.lua
+on 42.20". Session 17 found it in seconds with the script. A checked claim that
+leaves no artifact decays into an unchecked one.
+
+Read declared **fields and methods**, not the raw constant pool. A constant-pool
+grep matches any string anywhere in the class, so it passes `Perks.Foraging`.
+Note also that `Perks` is not a Java enum: it is a holder class of
+`public static final` fields, so an ACC_ENUM-only check finds nothing there.
+
+Confirmed to EXIST: `setStaggerBack`, `knockDown`, `setAlphaAndTarget`,
+`getWorldSoundManager`, `PlayWorldSound`, `IsoObject:setOutlineHighlight`,
+`setOutlineHighlightCol`, `isAdmin`, `BodyPartType.Foot_L`, `IsoThumpable`,
+`ISBuildingObject`, `ProceduralDistributions`, `IsoGridSquare:isGeneratorPoweringSquare`,
+`getClimateManager():getRainIntensity()`, `Capability.UseBuildCheat`,
+`IsoPlayer:getRole()`, `Role:hasCapability`, `ItemContainer:getFirstTypeRecurse`.
+
+Confirmed NOT to exist: `Perks.Foraging` (it is `PlantScavenging`), `Perks.Carpentry`
+(it is `Woodwork`), `Capability.CanBuildAnywhere` (it is `UseBuildCheat`), the
+`Climate` global (it is `getClimateManager()`), `getRainStrength` (it is
+`getRainIntensity`), `Base.TreeBranch` (it is `TreeBranch2`), `ChurchMisc` /
+`ChurchStorageMisc` (**42.20 has no church distribution at all**). There is **no
+electrocution system anywhere in the jar**.
+
+**Internal name ≠ displayed name.** `Woodwork` displays as "Carpentry" and
+`PlantScavenging` displays as "Foraging" (`IGUI_perks_*` / `Sandbox_*` in the vanilla
+EN translations). Mod code must use the internal name; player-facing tooltips must
+use the displayed one. The Sandbox_EN tooltips saying "Carpentry 2" and "Foraging"
+are therefore correct and were deliberately left alone.
+
+Rain intensity is normalised 0.0-1.0: vanilla `forageSystem` rounds
+`getPrecipitationIntensity()` to one decimal and multiplies chances by it, and
+`Bobber.lua` tests `getFogIntensity() >= 0.4`. `STORM_THRESHOLD = 0.8` relies on this.
 
 ## Architecture
 
@@ -60,12 +101,45 @@ Shared (WireNetwork, Config) → Client (Detection, UI, TriggerHandlers, CamoVis
 
 | Phase | Content | Status |
 |-------|---------|--------|
-| 1 (MVP) | Tier 0 + Tier 1 + Camouflage + SandboxVars | Code complete, 5 open bugs, sprites incomplete |
+| 1 (MVP) | Tier 0 + Tier 1 + Camouflage + SandboxVars | Code complete, no open bugs, untested in-game, sprite art placeholder |
 | 2 | Pull-alarms | Not started |
 | 3 | Electric fencing | Issue #13, API researched |
 | 4 | Advanced | Not started |
 
 ## Recent Changes
+
+### Session 17 (2026-08-05): every open code bug fixed, plus a name verifier
+
+Built `scripts/verify_names.py` + `scripts/pzclass.py` first, then fixed what it
+found. 67 references now resolve; 143/143 tests pass (was 131).
+
+Closed #14 through #18:
+
+- **#17** `Perks.Foraging` → `Perks.PlantScavenging`. Camouflaged wires were
+  invisible to every player forever, because the nil perk made `getPerkLevel`
+  return 0 for everyone.
+- **#18** the whole Climate call was fiction (`Climate.GetInstance():getRainStrength()`
+  — no such global, no such method). Now `getClimateManager():getRainIntensity()`.
+  Camouflage had never degraded from weather.
+- **#14** `Capability.CanBuildAnywhere` → `UseBuildCheat`, in all **three** places
+  (the issue named one), plus a nil guard on `getRole()`, which threw in SP.
+- **#15** two MP exploits closed: `WireTriggered` now requires the reporter to be
+  within 3 tiles and on the same floor, and `PlaceWire` verifies and consumes the
+  kit server-side instead of trusting the client.
+- **#16** cooldowns moved from game time to real seconds. Also fixed a bug the issue
+  did not mention: the server set the cooldown while detection checks it on the
+  *client*, so in MP the cooldown never applied at all. `WireTriggered` now
+  broadcasts the duration (not an absolute time — clock skew) and clients mirror it.
+  The broadcast is no longer gated on `soundName`, so silent Tanglefoot gets one too;
+  the client no longer substitutes a default sound when `soundName` is absent, which
+  would have made Tanglefoot audible.
+
+Two bugs found that were not on any issue: `ChurchStorageMisc` did not exist (bells
+silently absent from that table) and both Tier 1 recipes required `Carpentry`, which
+is not a perk — `Woodwork` is. Recipes were likely uncraftable.
+
+Unverified in-game still: sprites render, recipes register, loot reachable, sounds
+play. Nothing here was tested against a running game.
 
 ### Session 16 (2026-08-05): B42.20.2 audit — six silent failures, three fixed
 
@@ -90,33 +164,36 @@ Built `pz_unpack.py` at `c:/xampp/htdocs/pz-tilesheet/`. Generated all 4 invento
 ## To Resume
 
 ```
-Deadwire v0.1.1, Session 17. Phase 1 code complete but NOT shippable.
+Deadwire v0.1.1, Session 18. Phase 1 code complete, ZERO open code bugs,
+but nothing has ever been confirmed working in a running game.
 
-THIS WINDOW, in order:
+Everything left needs PZ actually running. That is the whole remaining list.
 
-1. #17: CamoVisibility.lua:73, Perks.Foraging -> Perks.PlantScavenging. One word.
-2. #18: CamoDegradation.lua:22, replace getRainStrength's body with
-     local cm = getClimateManager()
-     if not cm then return 0 end
-     return cm:getRainIntensity() or 0
-   Confirm in-game whether getRainIntensity is normalised 0-1; STORM_THRESHOLD=0.8 assumes it.
-3. #14: ServerCommands.lua:126, Capability.CanBuildAnywhere -> Capability.UseBuildCheat,
-   and nil-guard getRole().
-4. #16: cooldown is written in seconds but measured in game time, so 36 "seconds" is about
-   1.5 real seconds. Decide real-time (preferred) vs renaming the field.
-5. #15: PlaceWire never checks the player holds a kit, and WireTriggered accepts any client's
-   claim for any coordinate. Both MP-only exploits.
-6. Finish the smoke test. Harness works: PZ running with PZ Test Pilot enabled, then
+THIS WINDOW:
+
+1. Smoke test. Harness: PZ running with PZ Test Pilot enabled, then
      cd c:/xampp/htdocs/pz-test-pilot
      python scripts/cmd.py run_lua 'code=<lua>'
    cmd.py splits params on '=', so the code MUST be passed as code=<lua>.
-   Still unverified: sprites load, recipes registered, loot tables reachable, sounds play.
+   Check, in order:
+     a. getSprite("deadwire_01_0") .. _7 all non-nil  -> tilesheet actually loaded
+     b. getScriptManager():getItem("Base.Deadwire_TinCanTripLineKit") non-nil
+     c. all four craftRecipes registered (Woodwork:2 now, was the bogus Carpentry:2)
+     d. ProceduralDistributions.list.JanitorMisc contains Base.Bell after world load
+     e. place a wire, walk a zombie into it, hear the sound
+     f. camouflage a wire, check a low-skill character cannot see it and a
+        PlantScavenging 7 character can -- this path has NEVER worked before now
+     g. confirm getRainIntensity() really is 0-1 in a live storm (STORM_THRESHOLD=0.8)
 
-THEN the blocker: world sprite ART. The deadwire_01 tilesheet ships (.pack + .tiles, both
-declared in mod.info) so the sprites should load and the construction_01_24 fallback should
-never fire — but that is UNVERIFIED, and the 8 images in it are Session 10 placeholders.
-Source PNGs at repo root need crop/resize to 64x128 and a tilesheet rebuild.
-Check which is true first: getSprite("deadwire_01_0") through _7 via the harness.
+2. Then the blocker: world sprite ART. The 8 images in deadwire_01 are Session 10
+   placeholders. Source PNGs at repo root need crop/resize to 64x128 and a
+   tilesheet rebuild. Step 1a tells you whether the sheet loads at all before you
+   spend time on art.
 
-Run tests anytime: run_tests.bat
+3. Parked for Rob: delete the stale repo-root mod.info (0.1.0, poster=poster.png).
+   It sits outside Contents/ so PZ never reads it, but it reads like the manifest
+   and is not one. Session 17 misread it as such.
+
+Before any commit that touches names:  python scripts/verify_names.py
+Run tests anytime:                     run_tests.bat   (143 tests)
 ```

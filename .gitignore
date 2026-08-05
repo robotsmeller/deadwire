@@ -19,3 +19,10 @@ scratch/
 
 # Source assets (not part of mod)
 assets-testing/
+
+# Python tooling
+__pycache__/
+*.pyc
+
+# AFK session log (working notes, not project history)
+.claude/afk-log.md

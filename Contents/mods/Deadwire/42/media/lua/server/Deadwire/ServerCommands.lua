@@ -13,9 +13,38 @@ DeadwireServerCommands = DeadwireServerCommands or {}
 -- Command handler table
 local handlers = {}
 
+-- How close the reporting player must be to a wire for the server to believe
+-- their WireTriggered report. Detection is client-side by necessity
+-- (OnZombieUpdate is a client event), so the claim cannot be eliminated --
+-- only bounded to wires the reporter could plausibly see. Fixes #15.
+local TRIGGER_MAX_DIST = 3
+
 -- DRY: validate args contain position fields
 local function hasPosition(args)
     return args and args.x and args.y and args.z
+end
+
+-- Admin/privileged check.
+-- Capability.CanBuildAnywhere does not exist in 42.20; indexing the enum
+-- yielded nil, hasCapability(nil) returned false, and admins were silently
+-- denied. The real capability is UseBuildCheat. getRole() can also return nil
+-- (single player, or a player with no role assigned), which threw. Fixes #14.
+local function isPrivileged(player)
+    if not player then return false end
+    local role = player:getRole()
+    if not role then return false end
+    return role:hasCapability(Capability.UseBuildCheat)
+end
+
+-- Does this player actually hold the kit this wire type costs?
+-- The client-side build action consumes a kit, but PlaceWire is a separate
+-- server command any client can send directly, so it must check for itself.
+local function findKit(player, wireType)
+    local kitItem = DeadwireConfig.KitItems[wireType]
+    if not kitItem then return nil, true end   -- type needs no kit
+    local inv = player:getInventory()
+    if not inv then return nil, false end
+    return inv:getFirstTypeRecurse(kitItem), false
 end
 
 -----------------------------------------------------------
@@ -82,12 +111,25 @@ handlers["PlaceWire"] = function(player, args)
         return
     end
 
+    -- Player must actually hold the kit. Without this a modified client can
+    -- place wires it never crafted, bounded only by WireMaxPerPlayer. Fixes #15.
+    local kitItemObj, kitless = findKit(player, wireType)
+    if not kitless and not kitItemObj then
+        DeadwireConfig.log("PlaceWire: " .. username .. " has no kit for " .. wireType)
+        return
+    end
+
     -- Create IsoThumpable + register in WireNetwork + persist
     local networkId = DeadwireNetwork.generateNetworkId()
     local obj = DeadwireWireManager.createWire(sq, wireType, username, networkId, args.north)
     if not obj then
         DeadwireConfig.log("PlaceWire: WireManager.createWire failed")
         return
+    end
+
+    -- Consume only after placement is confirmed
+    if kitItemObj then
+        player:getInventory():Remove(kitItemObj)
     end
 
     if DeadwireConfig.getSandbox("LogWirePlacements", true) then
@@ -123,7 +165,7 @@ handlers["RemoveWire"] = function(player, args)
 
     -- Only owner or admin can remove
     local username = player:getUsername() or "SP"
-    if wire.ownerId ~= username and not player:getRole():hasCapability(Capability.CanBuildAnywhere) then
+    if wire.ownerId ~= username and not isPrivileged(player) then
         DeadwireConfig.log("RemoveWire: " .. username .. " not authorized")
         return
     end
@@ -147,6 +189,19 @@ end
 handlers["WireTriggered"] = function(player, args)
     if not hasPosition(args) or not args.wireType then return end
 
+    -- The reporter must be standing near the wire they claim fired. Without
+    -- this any client can destroy every single-use wire on the map, and burn
+    -- every camouflage layer, by reporting arbitrary coordinates. Fixes #15.
+    local psq = player:getSquare()
+    if not psq
+        or psq:getZ() ~= args.z
+        or math.abs(psq:getX() - args.x) > TRIGGER_MAX_DIST
+        or math.abs(psq:getY() - args.y) > TRIGGER_MAX_DIST then
+        DeadwireConfig.debugLog("WireTriggered: rejected distant report from "
+            .. (player:getUsername() or "SP"))
+        return
+    end
+
     local wire = DeadwireNetwork.getTile(args.x, args.y, args.z)
     if not wire then return end
 
@@ -166,6 +221,7 @@ handlers["WireTriggered"] = function(player, args)
     soundRadius = math.floor(soundRadius * multiplier)
 
     -- State changes based on wire type
+    local cooldownSeconds = nil
     if defaults.breakOnTrigger then
         -- Single-use: destroy wire
         DeadwireWireManager.destroyWire(args.x, args.y, args.z)
@@ -175,10 +231,9 @@ handlers["WireTriggered"] = function(player, args)
             z = args.z,
         })
     else
-        -- Reusable: set cooldown
+        -- Reusable: set cooldown. cooldownSeconds is real seconds (#16).
         local cooldownSec = defaults.cooldownSeconds or 36
-        local cooldownHours = cooldownSec / 3600
-        DeadwireNetwork.setCooldown(args.x, args.y, args.z, cooldownHours)
+        cooldownSeconds = DeadwireNetwork.setCooldown(args.x, args.y, args.z, cooldownSec)
     end
 
     -- Degrade camo durability if camouflaged
@@ -203,14 +258,20 @@ handlers["WireTriggered"] = function(player, args)
             .. args.x .. "," .. args.y .. "," .. args.z .. " by " .. username)
     end
 
-    -- Broadcast to all clients for MP sound (detecting client already played locally)
-    if soundName then
+    -- Broadcast to all clients: sound for MP audio, cooldownSeconds so their
+    -- local WireNetwork agrees the wire is spent. Detection runs client-side
+    -- against the client's own copy, so without this the cooldown existed only
+    -- on the server and every reusable wire re-armed instantly for every client
+    -- in MP. Tanglefoot has no sound and still needs the cooldown, so the
+    -- broadcast is no longer conditional on soundName.
+    if soundName or cooldownSeconds then
         sendServerCommand(DeadwireConfig.MODULE, "WireTriggered", {
             x = args.x,
             y = args.y,
             z = args.z,
             soundName = soundName,
             audioRadius = soundRadius,
+            cooldownSeconds = cooldownSeconds,
         })
     end
 end
@@ -246,7 +307,7 @@ end
 -----------------------------------------------------------
 
 handlers["DebugPlaceWire"] = function(player, args)
-    if not DeadwireConfig.DEBUG and not player:getRole():hasCapability(Capability.CanBuildAnywhere) then
+    if not DeadwireConfig.DEBUG and not isPrivileged(player) then
         return
     end
 
@@ -283,7 +344,7 @@ end
 -----------------------------------------------------------
 
 handlers["DebugListWires"] = function(player, args)
-    if not DeadwireConfig.DEBUG and not player:getRole():hasCapability(Capability.CanBuildAnywhere) then
+    if not DeadwireConfig.DEBUG and not isPrivileged(player) then
         return
     end
 

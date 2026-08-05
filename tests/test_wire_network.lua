@@ -294,9 +294,13 @@ end)
 
 suite("DeadwireNetwork cooldown")
 
+-- Cooldowns are measured in REAL seconds (os.time), not game hours -- see #16.
+-- These tests drive _setOsTime, not _setWorldAge; advancing world age must have
+-- no effect at all on a cooldown.
+
 test("isOnCooldown returns false when no cooldown set", function()
     _reset()
-    _setWorldAge(0)
+    _setOsTime(0)
     DeadwireNetwork.registerTile(1, 1, 0, 1, "tin_can_tripline", "p1")
     assert_false(DeadwireNetwork.isOnCooldown(1, 1, 0))
 end)
@@ -308,35 +312,52 @@ end)
 
 test("setCooldown then isOnCooldown returns true within window", function()
     _reset()
-    _setWorldAge(10)
+    _setOsTime(1000)
     DeadwireNetwork.registerTile(1, 1, 0, 1, "tin_can_tripline", "p1")
-    DeadwireNetwork.setCooldown(1, 1, 0, 2)   -- expires at hour 12
-    -- Still at hour 10, inside cooldown window
+    DeadwireNetwork.setCooldown(1, 1, 0, 36)   -- expires at t=1036
+    _setOsTime(1035)
     assert_true(DeadwireNetwork.isOnCooldown(1, 1, 0))
 end)
 
 test("isOnCooldown returns false after time advances past cooldown", function()
     _reset()
-    _setWorldAge(10)
+    _setOsTime(1000)
     DeadwireNetwork.registerTile(1, 1, 0, 1, "tin_can_tripline", "p1")
-    DeadwireNetwork.setCooldown(1, 1, 0, 2)   -- expires at hour 12
-    _setWorldAge(13)                            -- advance past cooldown
+    DeadwireNetwork.setCooldown(1, 1, 0, 36)   -- expires at t=1036
+    _setOsTime(1100)
     assert_false(DeadwireNetwork.isOnCooldown(1, 1, 0))
 end)
 
 test("isOnCooldown returns false exactly at expiry boundary", function()
     _reset()
-    _setWorldAge(10)
+    _setOsTime(1000)
     DeadwireNetwork.registerTile(1, 1, 0, 1, "tin_can_tripline", "p1")
-    DeadwireNetwork.setCooldown(1, 1, 0, 2)   -- cooldownUntil = 12
-    _setWorldAge(12)                            -- exactly at boundary: 12 < 12 is false
+    DeadwireNetwork.setCooldown(1, 1, 0, 36)   -- cooldownUntil = 1036
+    _setOsTime(1036)                            -- 1036 < 1036 is false
     assert_false(DeadwireNetwork.isOnCooldown(1, 1, 0))
 end)
 
-test("setCooldown on nonexistent tile is a no-op", function()
+test("cooldown ignores game time entirely (regression: #16)", function()
     _reset()
-    -- Should not throw
-    DeadwireNetwork.setCooldown(99, 99, 99, 5)
+    _setOsTime(1000)
+    _setWorldAge(10)
+    DeadwireNetwork.registerTile(1, 1, 0, 1, "reinforced_tripline", "p1")
+    DeadwireNetwork.setCooldown(1, 1, 0, 36)
+    _setWorldAge(9999)   -- centuries of game time, no real seconds elapsed
+    assert_true(DeadwireNetwork.isOnCooldown(1, 1, 0),
+        "world age must not expire a real-time cooldown")
+end)
+
+test("setCooldown returns the duration applied", function()
+    _reset()
+    _setOsTime(500)
+    DeadwireNetwork.registerTile(1, 1, 0, 1, "reinforced_tripline", "p1")
+    assert_eq(DeadwireNetwork.setCooldown(1, 1, 0, 36), 36)
+end)
+
+test("setCooldown on nonexistent tile is a no-op returning nil", function()
+    _reset()
+    assert_eq(DeadwireNetwork.setCooldown(99, 99, 99, 5), nil)
 end)
 
 
