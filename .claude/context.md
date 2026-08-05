@@ -6,7 +6,7 @@ description: PZ mod — perimeter trip lines and electric fencing for Project Zo
 last_session: 17
 last_updated: 2026-08-05
 continue_with: "In-game smoke test: sprites load, recipes registered, loot reachable, sounds play, camo now visible/degrading. All five code bugs (#14-#18) are fixed and merged."
-blockers: "World sprite ART is placeholder. The deadwire_01 tilesheet ships, is declared in mod.info, and its 8 tile indices now provably match the names Config.Sprites asks for (verify_names.py checks this), so the sprites should load and the construction_01_24 fallback should never fire. The 8 images themselves are still Session 10 placeholders, not the finished Gemini art, and nothing has been confirmed rendering in-game."
+blockers: "World sprite ART is placeholder — the 8 images in deadwire_01 are Session 10 placeholders, not finished art. Loading is no longer the suspected problem: validate_pack.py passes 108/108, the 8 tile names match what Config.Sprites asks for, and tiledef id 200 collides with nothing (vanilla is all below 100; no installed mod declares one). That is still an inference from file structure, not an observation of PZ registering the sheet."
 
 tech:
   stack: pz-lua-mod

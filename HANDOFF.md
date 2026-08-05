@@ -54,7 +54,22 @@ Closed in Session 17: #14, #15, #16, #17, #18.
 
 - **v0.1.1** — tagged, released on GitHub. Not on Steam Workshop.
 - mod.info: `modversion=0.1.1`, `pack=deadwire_01`, `tiledef=deadwire_01 200`
-- `versionMin=42.0.0` is **wrong** and should be raised. The mod needs 42.13+ for namespaced tags and 42.15+ for JSON translations.
+- `versionMin` raised `42.0.0` → **`42.15.0`** in Session 17. 42.15 is the floor the mod
+  demonstrably cannot go below (JSON translations landed there; namespaced tags need
+  42.13). It is not a tested claim — everything has only ever been checked against
+  42.20 — but 42.20 would lock out users the mod very likely works for, and 42.0.0 was
+  simply false. Lower it only with evidence, raise it if 42.15 turns out to break.
+
+### Tilesheet: loads-or-not is now answered as far as static checking can
+
+- `python tools/validate_pack.py` → **108/108 pass**. The shipped `.pack` is structurally
+  valid, all 8 sprite names are present at the correct 64×128 regions in a 512×128 sheet,
+  and the header/page/entry layout matches vanilla `Tiles2x.pack`.
+- `tiledef` id 200 is free: vanilla sits entirely below 100 (ids 1, 13, 68, 88) and none
+  of the 6 installed mods declares a tiledef. `verify_names.py` now checks this.
+- So the remaining sprite risk is **art quality, not loading** — with the caveat that
+  "should load" is still an inference from file structure, not an observation of PZ
+  registering the sheet. Confirm with `getSprite("deadwire_01_0")` in the live game.
 
 ---
 
