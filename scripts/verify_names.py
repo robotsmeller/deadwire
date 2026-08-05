@@ -20,6 +20,7 @@ Checked categories (each has hard ground truth in the install):
   SkillRequired/xpAward  perk names inside craftRecipe blocks
   Icon = X             media/textures/Item_X.png must exist
   sprite names         this mod's own .tiles.txt tile indices
+  tiledef id           in range, and not colliding with a vanilla tilesheet
 
 Deliberately NOT checked: bare global function names. Many legitimate globals
 are defined in vanilla Lua rather than exposed from Java, so a Java-only check
@@ -27,6 +28,7 @@ reports false positives, and a checker that cries wolf stops being read.
 """
 
 import argparse
+import glob
 import os
 import re
 import sys
@@ -38,6 +40,10 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MOD = os.path.join(REPO, "Contents", "mods", "Deadwire", "42", "media")
 
 DEFAULT_PZ = r"C:/Program Files (x86)/Steam/steamapps/common/ProjectZomboid"
+
+# Where PZ loads local (non-Workshop) mods from. Used only for tiledef collision
+# checking, and skipped without complaint if it is not there.
+MODS_DIR = os.path.join(os.path.expanduser("~"), "Zomboid", "mods")
 
 # Item ids referenced with a module prefix this checker cannot resolve are
 # skipped rather than reported; only Base.* has a single unambiguous source.
@@ -224,19 +230,20 @@ def check_config_sprites(rep):
         rep.ok("tilesheet", "deadwire_01.pack")
 
 
-def check_modinfo(rep):
-    """Both mod.info files must agree; B42 reads 42/ but the root one is required."""
-    def parse(path):
-        d = {}
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                if "=" in line and not line.strip().startswith("#"):
-                    k, v = line.split("=", 1)
-                    d[k.strip()] = v.strip()
-        return d
+def _parse_modinfo(path):
+    d = {}
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                d[k.strip()] = v.strip()
+    return d
 
-    root = parse(os.path.join(REPO, "Contents", "mods", "Deadwire", "mod.info"))
-    inner = parse(os.path.join(REPO, "Contents", "mods", "Deadwire", "42", "mod.info"))
+
+def check_modinfo(rep, pz):
+    """Both mod.info files must agree; B42 reads 42/ but the root one is required."""
+    root = _parse_modinfo(os.path.join(REPO, "Contents", "mods", "Deadwire", "mod.info"))
+    inner = _parse_modinfo(os.path.join(REPO, "Contents", "mods", "Deadwire", "42", "mod.info"))
     for key in ("name", "id", "modversion", "versionMin", "poster", "pack", "tiledef"):
         a, b = root.get(key), inner.get(key)
         if a == b:
@@ -244,6 +251,44 @@ def check_modinfo(rep):
         else:
             rep.bad("mod.info", key, "Contents/mods/Deadwire/mod.info",
                     "root=%r vs 42/=%r" % (a, b))
+
+    # A tiledef ID collision silently breaks every world sprite: the later
+    # tilesheet wins and Deadwire's tiles resolve to someone else's art.
+    tiledef = inner.get("tiledef", "")
+    parts = tiledef.split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        rep.bad("tiledef", tiledef or "(missing)", "42/mod.info",
+                "expected '<name> <id>' with a numeric id")
+        return
+    ours = int(parts[1])
+    if not 100 <= ours <= 8190:
+        rep.bad("tiledef", str(ours), "42/mod.info", "id must be in 100-8190")
+        return
+
+    # Vanilla currently sits entirely below 100, so in practice the collision
+    # that can actually happen is with another installed mod. Both are checked.
+    taken = {}
+    for tiles_txt in glob.glob(os.path.join(pz, "media", "*.tiles.txt")):
+        with open(tiles_txt, encoding="utf-8", errors="replace") as fh:
+            m = re.search(r"^\s*id\s*=\s*(\d+)", fh.read(), re.M)
+        if m:
+            taken.setdefault(int(m.group(1)), "vanilla " + os.path.basename(tiles_txt))
+
+    for mod_info in glob.glob(os.path.join(MODS_DIR, "*", "mod.info")):
+        other = _parse_modinfo(mod_info)
+        if other.get("id") == "Deadwire":
+            continue
+        bits = other.get("tiledef", "").split()
+        if len(bits) == 2 and bits[1].isdigit():
+            taken.setdefault(int(bits[1]),
+                             "mod " + (other.get("id") or os.path.basename(mod_info)))
+
+    if ours in taken:
+        rep.bad("tiledef", str(ours), "42/mod.info",
+                "collides with %s -- every Deadwire world sprite would resolve "
+                "to the other sheet's art" % taken[ours])
+    else:
+        rep.ok("tiledef", str(ours))
 
 
 def main():
@@ -265,7 +310,7 @@ def main():
     check_lua(rep, jar, items, dists)
     check_scripts(rep, jar, items)
     check_config_sprites(rep)
-    check_modinfo(rep)
+    check_modinfo(rep, args.pz)
 
     print("verify_names: %d references checked against %s"
           % (rep.checked, os.path.basename(args.pz)))

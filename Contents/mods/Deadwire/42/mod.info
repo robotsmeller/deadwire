@@ -4,6 +4,6 @@ description=Perimeter trip lines and electric fencing for base defense. Tin cans
 url=https://github.com/robannable/deadwire
 poster=42/poster.png
 modversion=0.1.1
-versionMin=42.0.0
+versionMin=42.15.0
 pack=deadwire_01
 tiledef=deadwire_01 200
