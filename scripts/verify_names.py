@@ -311,6 +311,51 @@ def check_sandbox_options(rep):
                 "declared option has no EN label")
 
 
+def _load_translation(name):
+    path = os.path.join(TRANSLATE_EN, name + ".json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    return data.get(name, data)
+
+
+def check_categories(rep):
+    """Item and recipe categories need IGUI_ keys or the UI shows the raw key.
+
+    `DisplayCategory = X` on an item resolves through IGUI_ItemCat_X, and
+    `category = X` on a craftRecipe through IGUI_CraftCategory_X -- both in
+    IG_UI.json, which this mod did not have at all until Session 17.
+    """
+    ig = _load_translation("IG_UI")
+
+    def collect(pattern, fname):
+        path = os.path.join(MOD, "scripts", fname)
+        if not os.path.exists(path):
+            return set()
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            code = re.sub(r"//[^\n]*", "", fh.read())
+        return set(re.findall(pattern, code, re.M))
+
+    for cat in sorted(collect(r"^\s*DisplayCategory\s*=\s*([A-Za-z0-9_]+)",
+                              "deadwire_items.txt")):
+        rep.check("item category", "IGUI_ItemCat_" + cat, ig,
+                  "Translate/EN/IG_UI.json")
+    for cat in sorted(collect(r"^\s*category\s*=\s*([A-Za-z0-9_]+)",
+                              "deadwire_recipes.txt")):
+        rep.check("recipe category", "IGUI_CraftCategory_" + cat, ig,
+                  "Translate/EN/IG_UI.json")
+
+    # The sandbox page label lives in Sandbox.json, not IG_UI.json.
+    sb = _load_translation("Sandbox")
+    opts = os.path.join(MOD, "sandbox-options.txt")
+    with open(opts, encoding="utf-8", errors="replace") as fh:
+        pages = set(re.findall(r"^\s*page\s*=\s*([A-Za-z0-9_]+)", fh.read(), re.M))
+    for page in sorted(pages):
+        rep.check("sandbox page", "Sandbox_" + page, sb,
+                  "Translate/EN/Sandbox.json")
+
+
 def check_translation_filenames(rep):
     """A translation file PZ does not ask for by name is simply never read."""
     if not os.path.isdir(TRANSLATE_EN):
@@ -429,6 +474,7 @@ def main():
     check_scripts(rep, jar, items)
     check_sandbox_options(rep)
     check_translation_filenames(rep)
+    check_categories(rep)
     check_config_sprites(rep)
     check_modinfo(rep, args.pz)
 
