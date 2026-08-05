@@ -17,14 +17,15 @@ local function preDistributionMerge()
     local chance = getSpawnChance()
 
     -- Bell loot: general utility/farm locations
+    -- Names verified against vanilla ProceduralDistributions.lua on 42.20
     local bellDists = {
-        "FarmTools",
+        "FarmerTools",
         "BarnTools",
         "ToolStoreTools",
         "GardenStoreTools",
         "SchoolLockers",
         "OfficeDeskHome",
-        "ChurchMisc",
+        "ChurchStorageMisc",
     }
 
     local bellCount = 0
@@ -36,17 +37,19 @@ local function preDistributionMerge()
         end
     end
 
-    -- Issue #12: ReinforcedTripLineKit in 42.15 metalfabrication rooms
-    -- NOTE: distribution names need in-game verification for 42.15
+    -- Issue #12: ReinforcedTripLineKit in metalworking locations
+    -- Names verified against vanilla ProceduralDistributions.lua on 42.20
     local kitDists = {
-        "MetalFabrication",
-        "MetalFabricationStorage",
+        "MetalShopTools",
+        "MetalWorkerTools",
+        "WeldingWorkshopMetal",
+        "GarageMetalwork",
     }
 
     local kitCount = 0
     for _, distName in ipairs(kitDists) do
         if ProceduralDistributions.list[distName] then
-            table.insert(ProceduralDistributions.list[distName].items, "Base.ReinforcedTripLineKit")
+            table.insert(ProceduralDistributions.list[distName].items, "Base.Deadwire_ReinforcedTripLineKit")
             table.insert(ProceduralDistributions.list[distName].items, chance)
             kitCount = kitCount + 1
         end

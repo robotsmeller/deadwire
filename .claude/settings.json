@@ -1,6 +1,12 @@
 {
   "permissions": {
     "allow": [
+      "Read(c:\\xampp\\htdocs\\deadwire\\.claude\\context.md)",
+      "Edit(c:\\xampp\\htdocs\\deadwire\\.claude\\context.md)",
+      "Write(c:\\xampp\\htdocs\\deadwire\\.claude\\context.md)",
+      "Read(c:\\xampp\\htdocs\\deadwire\\HANDOFF.md)",
+      "Edit(c:\\xampp\\htdocs\\deadwire\\HANDOFF.md)",
+      "Write(c:\\xampp\\htdocs\\deadwire\\HANDOFF.md)",
       "WebFetch(domain:projectzomboid.com)",
       "WebFetch(domain:pzwiki.net)",
       "WebFetch(domain:theindiestone.com)"

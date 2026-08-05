@@ -3,12 +3,12 @@ module Base
     craftRecipe Deadwire_CraftTinCanTripLine
     {
         time = 120,
-        tags = InHandCraft;CanBeDoneInDark,
+        Tags = InHandCraft;CanBeDoneInDark,
         category = Deadwire,
         inputs
         {
             item 3 [Base.TinCanEmpty],
-            item 1 [Base.FishingLine;Base.Twine],
+            item 2 [Base.FishingLine;Base.Twine;Base.ElectricWire],
             item 2 [Base.Nails],
         }
         outputs
@@ -20,7 +20,7 @@ module Base
     craftRecipe Deadwire_CraftReinforcedTripLine
     {
         time = 200,
-        tags = AnySurfaceCraft,
+        Tags = AnySurfaceCraft,
         category = Deadwire,
         SkillRequired = Carpentry:2;Trapping:2,
         xpAward = Carpentry:15;Trapping:15,
@@ -40,7 +40,7 @@ module Base
     craftRecipe Deadwire_CraftBellTripLine
     {
         time = 200,
-        tags = AnySurfaceCraft,
+        Tags = AnySurfaceCraft,
         category = Deadwire,
         SkillRequired = Carpentry:2;Trapping:2,
         xpAward = Carpentry:15;Trapping:15,
@@ -60,14 +60,14 @@ module Base
     craftRecipe Deadwire_CraftTanglefoot
     {
         time = 150,
-        tags = InHandCraft,
+        Tags = InHandCraft,
         category = Deadwire,
         SkillRequired = Trapping:1,
         xpAward = Trapping:10,
         inputs
         {
-            item 3 [Base.TreeBranch],
-            item 1 [Base.FishingLine;Base.Twine],
+            item 3 [Base.TreeBranch2;Base.LargeBranch;Base.Stake;Base.WoodenStick2;Base.LongStick],
+            item 2 [Base.FishingLine;Base.Twine;Base.ElectricWire],
             item 2 [Base.Nails],
         }
         outputs

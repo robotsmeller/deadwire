@@ -2,7 +2,7 @@ module Base
 {
     item Deadwire_TinCanTripLineKit
     {
-        Type = Normal,
+        ItemType = base:normal,
         DisplayCategory = Deadwire,
         Weight = 1.0,
         Icon = Deadwire_TinCanTripLineKit,
@@ -11,7 +11,7 @@ module Base
 
     item Deadwire_ReinforcedTripLineKit
     {
-        Type = Normal,
+        ItemType = base:normal,
         DisplayCategory = Deadwire,
         Weight = 1.5,
         Icon = Deadwire_ReinforcedTripLineKit,
@@ -20,7 +20,7 @@ module Base
 
     item Deadwire_BellTripLineKit
     {
-        Type = Normal,
+        ItemType = base:normal,
         DisplayCategory = Deadwire,
         Weight = 1.5,
         Icon = Deadwire_BellTripLineKit,
@@ -29,7 +29,7 @@ module Base
 
     item Deadwire_TanglefootKit
     {
-        Type = Normal,
+        ItemType = base:normal,
         DisplayCategory = Deadwire,
         Weight = 1.0,
         Icon = Deadwire_TanglefootKit,
