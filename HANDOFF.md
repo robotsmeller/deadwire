@@ -117,6 +117,26 @@ Still open: `sendServerCommand(player, module, cmd, args)` targeted send, used i
 
 ## Session History
 
+### Session 17, part 2: the translations were never loading
+
+Every item name, recipe name and sandbox label in the mod displayed as a raw id, and
+had since the mod was written. The three files were named `ItemName_EN.json`,
+`Recipes_EN.json`, `Sandbox_EN.json`.
+
+`zombie/core/Translator$1` holds a **fixed hardcoded list** of translation base names,
+and the loader builds `<root>/media/lua/shared/Translate/<LANG>/<NAME>.json`. `ItemName`
+is on that list. `ItemName_EN` is not. A file outside the list is never opened — no
+error, no warning, no log line.
+
+The `_EN` suffix is the B41 `.txt` convention (`ItemName_EN.txt` with a matching table
+name) carried into B42's JSON by habit, and it was recorded as correct in the project
+memory file, which has now been corrected. The key formats inside the files were always
+right; only the filenames were wrong.
+
+Renamed to `ItemName.json` / `Recipes.json` / `Sandbox.json`. `verify_names.py` now
+rejects any translation filename PZ will not ask for, and was confirmed to fire on the
+old name.
+
 ### Session 17 (2026-08-05): all five code bugs closed, name verifier built
 
 Built `scripts/verify_names.py` + `scripts/pzclass.py` *before* fixing anything, on the

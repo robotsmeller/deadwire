@@ -29,7 +29,15 @@ workflow:
 
 ## B42 Mod Structure (REQUIRED)
 
-`mod.info` at root AND in `42/`, both must match. `common/` must exist even if empty. `poster=42/poster.png`. `sandbox-options.txt` in `42/media/`. Translation files are JSON since 42.15, in `42/media/lua/shared/Translate/EN/`.
+`mod.info` at root AND in `42/`, both must match. `common/` must exist even if empty. `poster=42/poster.png`. `sandbox-options.txt` in `42/media/`.
+
+Translation files are JSON since 42.15, in `42/media/lua/shared/Translate/EN/`, and the
+filenames carry **no `_EN` suffix** — the `EN/` directory already says the language.
+`ItemName.json`, `Recipes.json`, `Sandbox.json`. `zombie/core/Translator$1` holds a fixed
+hardcoded list of base names and builds `Translate/<LANG>/<NAME>.json`; a file outside
+that list is never opened, with no error. Session 17 found all three of this mod's
+translation files were named `*_EN.json` (B41 `.txt` convention carried over), so every
+item, recipe and sandbox label displayed as a raw id. `verify_names.py` checks this now.
 
 ## Key Rules
 

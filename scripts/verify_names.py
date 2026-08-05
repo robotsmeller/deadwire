@@ -48,6 +48,30 @@ DEFAULT_PZ = r"C:/Program Files (x86)/Steam/steamapps/common/ProjectZomboid"
 # checking, and skipped without complaint if it is not there.
 MODS_DIR = os.path.join(os.path.expanduser("~"), "Zomboid", "mods")
 
+TRANSLATE_EN = os.path.join(
+    "Contents", "mods", "Deadwire", "42", "media",
+    "lua", "shared", "Translate", "EN")
+TRANSLATE_EN = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), TRANSLATE_EN)
+
+# Translator loads a FIXED list of base names and builds the path
+# "<root>/media/lua/shared/Translate/<LANG>/<NAME>.json". The names live in
+# zombie/core/Translator$1. A file outside this set is never opened -- no error,
+# no warning, just untranslated raw keys shown to the player.
+#
+# The B41 convention was ItemName_EN.txt with a matching table name, and the _EN
+# suffix carried over into this project's JSON files by habit. It was wrong for
+# all three of them, and every item, recipe and sandbox option in the mod
+# displayed as a raw id until Session 17.
+TRANSLATOR_BASE_NAMES = {
+    "Attributes", "BodyParts", "Challenge", "ContextMenu", "Credits",
+    "DynamicRadio", "Entity", "EvolvedRecipeName", "Farming", "Fluids",
+    "GameSound", "IG_UI", "ItemName", "MakeUp", "MapLabel", "Moodles",
+    "Moveables", "Print_Media", "Print_Text", "RadioData", "RecipeGroups",
+    "Recipes", "Recorded_Media", "Sandbox", "Stash", "SurvivalGuide",
+    "SurvivorNames", "Tooltip", "UI",
+}
+
 # Item ids referenced with a module prefix this checker cannot resolve are
 # skipped rather than reported; only Base.* has a single unambiguous source.
 ITEM_RE = re.compile(r"\bBase\.([A-Za-z_][A-Za-z0-9_]*)")
@@ -275,7 +299,7 @@ def check_sandbox_options(rep):
         rep.ok("sandbox option", key)
 
     # Every declared option needs an EN label or the settings screen shows the key.
-    tr_path = os.path.join(MOD, "lua", "shared", "Translate", "EN", "Sandbox_EN.json")
+    tr_path = os.path.join(TRANSLATE_EN, "Sandbox.json")
     with open(tr_path, encoding="utf-8") as fh:
         data = json.load(fh)
     table = data.get("Sandbox_EN", data)
@@ -285,6 +309,28 @@ def check_sandbox_options(rep):
     for key in sorted(declared - translated):
         rep.bad("sandbox translation", key, "Translate/EN/Sandbox_EN.json",
                 "declared option has no EN label")
+
+
+def check_translation_filenames(rep):
+    """A translation file PZ does not ask for by name is simply never read."""
+    if not os.path.isdir(TRANSLATE_EN):
+        rep.bad("translations", "Translate/EN", "media/lua/shared/",
+                "directory missing")
+        return
+    for fn in sorted(os.listdir(TRANSLATE_EN)):
+        if not fn.endswith(".json"):
+            continue
+        base = fn[:-len(".json")]
+        if base in TRANSLATOR_BASE_NAMES:
+            rep.ok("translation file", fn)
+        else:
+            hint = ""
+            if base.endswith("_EN") and base[:-3] in TRANSLATOR_BASE_NAMES:
+                hint = ("drop the _EN suffix -- it is already in EN/; "
+                        "should be %s.json" % base[:-3])
+            else:
+                hint = "not a name Translator loads; the file is never opened"
+            rep.bad("translation file", fn, "Translate/EN/", hint)
 
 
 def check_config_sprites(rep):
@@ -382,6 +428,7 @@ def main():
     check_lua(rep, jar, items, dists)
     check_scripts(rep, jar, items)
     check_sandbox_options(rep)
+    check_translation_filenames(rep)
     check_config_sprites(rep)
     check_modinfo(rep, args.pz)
 
