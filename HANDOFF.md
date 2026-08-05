@@ -2,9 +2,11 @@
 
 ## Current Priority
 
-**Complete world sprites, then in-game test full chain (Sprints 3+4)**
+**Fix #17 and #18, then #14/#15/#16, then finish the in-game smoke test**
 
-All 4 inventory icons replaced with Gemini-generated art (Session 15). World sprites in progress — full-size source PNGs saved at repo root, need manual crop/resize then tilesheet rebuild before in-game test.
+#17 and #18 are one-line fixes that between them revive the entire camouflage system, which has never worked in either direction.
+
+**Blocker for release:** world sprite *art* is placeholder. The `deadwire_01` tilesheet does ship (`.pack` + `.tiles`, both declared in mod.info), so the `construction_01_24` fallback should never fire — but that is unverified, and the 8 images in the sheet are Session 10 placeholders rather than the finished Gemini art. Source PNGs sit at repo root pending crop/resize and a tilesheet rebuild.
 
 ---
 
@@ -12,34 +14,36 @@ All 4 inventory icons replaced with Gemini-generated art (Session 15). World spr
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Design Document | Done | `docs/DESIGN.md` |
-| Implementation Plan | Done | `docs/IMPLEMENTATION-PLAN.md` |
-| Mod Scaffolding | Done | mod.info (root + 42/), common/, correct structure |
-| Sprint 1 (Foundation) | **PASSED** | All 5 in-game tests pass (Session 6) |
-| Sprint 2 (Placement) | **PASSED** | All 6 tests pass (Session 8) |
-| Sprint 3 (Sound+Trigger) | **Ready to test** | Code complete + audited + custom sprites + all kits |
-| 42.15 compat | **Done** | Translation files migrated to JSON (Session 11) |
-| Audit (Sprints 2+3) | **Done** | 8 bugs fixed (Session 11) |
-| Custom world sprites | **In progress** | Placeholders replaced with Gemini art in progress. Source PNGs at repo root pending resize + tilesheet rebuild. |
-| pz-tilesheet tool | **Done** | `tools/pz-tilesheet/`, also published standalone |
-| Test harness | **Done** | 131 tests, 0 failures — `run_tests.bat` (Session 12) |
-| Sprint 4 (Camo+Config) | **Code complete** | CamoVisibility, CamoDegradation, SandboxVars done. ModOptions deferred. |
-| Session 14 deferred fixes | **Done** | tileKey float safety, isServer guard, Issue #12 code, north orientation |
+| Sprint 1 (Foundation) | **PASSED** | In-game, Session 6 |
+| Sprint 2 (Placement) | **PASSED** | In-game, Session 8 |
+| Sprint 3 (Sound+Trigger) | **Partly verified** | Items + globals confirmed in-game S16. Sprites, recipes, sounds still untested |
+| Sprint 4 (Camo+Config) | **Broken** | Both halves dead: #17 and #18 |
+| 42.20.2 compat | **Audited** | Six silent failures found, three fixed in 4537d2c |
+| Custom world sprites | **Placeholder art** | Tilesheet ships and should load; images are S10 placeholders. Release blocker |
+| Test harness | **Done** | 131 tests — `run_tests.bat` |
+| pz-test-pilot harness | **Working** | Can drive the live game, see To Resume in context.md |
 
 ---
 
 ## Open Issues
 
-| # | Title | Labels | Status |
-|---|-------|--------|--------|
-| 12 | Add loot distribution for metalfabrication rooms (42.15) | enhancement, phase-1 | Code done — dist names need in-game verification |
+| # | Title | Severity |
+|---|-------|----------|
+| 18 | Rain never degrades camouflage: the entire Climate API call is wrong | High |
+| 17 | Camouflage skill scaling is dead: `Perks.Foraging` does not exist | High |
+| 16 | Wire cooldown written in seconds, measured in game time | Medium |
+| 15 | MP: server trusts client on wire triggers and kit consumption | Medium |
+| 14 | Admin wire removal broken: `Capability.CanBuildAnywhere` does not exist | Medium |
+| 13 | Tier 3: electrified perimeter wire (generator-powered) | Phase 3 |
+| 12 | Loot distribution for metalworking rooms | Code fixed S16, needs in-game confirm |
 
 ---
 
 ## Version
 
-- **v0.1.1** — tagged, released on GitHub
+- **v0.1.1** — tagged, released on GitHub. Not on Steam Workshop.
 - mod.info: `modversion=0.1.1`, `pack=deadwire_01`, `tiledef=deadwire_01 200`
+- `versionMin=42.0.0` is **wrong** and should be raised. The mod needs 42.13+ for namespaced tags and 42.15+ for JSON translations.
 
 ---
 
@@ -47,73 +51,50 @@ All 4 inventory icons replaced with Gemini-generated art (Session 15). World spr
 
 | Decision | Rationale | Date |
 |----------|-----------|------|
-| No RecalcAllWithNeighbours on wire place | Trip wires must be pathfinding-transparent. Recalc on place updated adjacent door tiles causing blocking. Recalc only on removal. Fixes #8. | 2026-03-11 |
-| WireNetworkSync broadcast (not targeted) | registerTile is idempotent; broadcast avoids unverified 4-arg sendServerCommand overload. | 2026-03-11 |
-| CamoVisibility on OnTick+throttle (not EveryOneMinute) | Visibility needs ~1s responsiveness when player moves or gains skill. OnTick with 60-tick counter. Visual-only, no game logic. | 2026-03-11 |
-| CamoDegradation on EveryTenMinutes | Rain degrades slowly; 10-minute checks match the scale. No need for finer granularity. | 2026-03-11 |
-| tileKey floors coords | Float/int key mismatch possible if coords arrive as 10.0 vs 10. math.floor in tileKey + registerTile. | 2026-03-11 |
-|----------|-----------|------|
-| `OnZombieUpdate` + hash-table | Only proven pattern for tile detection. O(1) lookup. | 2026-02-20 |
+| No guards around unverified API names | A guard around a typo is indistinguishable from a guard around a real fallback. Cost three dead features. | 2026-08-05 |
+| Verify names against the jar constant pool | Substring-matching the vanilla Lua tree gives false negatives: it passes `Perks.Foraging`. | 2026-08-05 |
+| Loot uses `.items` flat pairs | Matches vanilla on 42.20. The 42.16 `weightChance` rule applies to `procList`, not `.items`. | 2026-08-05 |
+| Explicit item lists over `tags[...]` for Tanglefoot | A recipe line is an item list or a tags list, never both, and Stake carries `tentpeg` not `woodhandle`. | 2026-08-05 |
+| No RecalcAllWithNeighbours on wire place | Trip wires must be pathfinding-transparent. Recalc only on removal. Fixes #8. | 2026-03-11 |
+| CamoVisibility on OnTick + 60-tick throttle | Visibility needs ~1s responsiveness. Visual-only, no game logic. | 2026-03-11 |
 | Detection.lua in **client/** | OnZombieUpdate/OnPlayerUpdate are client-only events. | 2026-02-20 |
-| `IsoThumpable` per-tile | Vanilla barbed wire uses this exact pattern. | 2026-02-20 |
-| `module Base` | Custom modules broken in B42 MP. | 2026-02-20 |
-| BuildActions.lua in **server/** | ISBuildingObject is in server/. derive() at file-load time requires server/. | 2026-02-21 |
-| GlobalModData for persistence | `ModData.getOrCreate()` persists in save file. | 2026-02-21 |
-| Python packer over pz-pack | No MSVC build tools. Python 3.11 available. More maintainable. | 2026-02-22 |
-| Mono OGG requirement | PZ is3D audio silently fails on stereo. All sound files must be mono. | 2026-02-22 |
-| Binary .tiles required | PZ needs compiled tdef binary, not just .tiles.txt. Verified via workshop mods. | 2026-02-22 |
-| Dedup via os.time() | Real-time seconds (1s window). Game-hours at 60x = ~1 frame window (was broken). | 2026-03-11 |
-| Admin check: isAdmin() / getRole() | Client: `isAdmin()` global. Server: `player:getRole():hasCapability(Capability.CanBuildAnywhere)`. `isAccessLevel` does not exist. | 2026-03-11 |
-| Sound: SP local, MP broadcast | TriggerHandlers plays locally only in SP (`not isClient()`). MP uses server broadcast via EventHandlers. Prevents double-play. | 2026-03-11 |
-| Player stagger: setBumpType | `setSlowFactor`/`setSlowTimer` don't exist in B42. Stagger via `setBumpType("stagger")` + `setVariable`. | 2026-03-11 |
-| Translation files now JSON | PZ 42.15 requires `.json` files. Keys: ItemName drops `ItemName_` prefix; Recipes drops `Recipe_` prefix; Sandbox keeps `Sandbox_` prefix. | 2026-03-11 |
-| transmitRemoveItemFromSquare valid server-side | Confirmed in ISBuildingObject.lua — not a client-only API. | 2026-03-11 |
+| BuildActions.lua in **server/** | `ISBuildingObject` lives in server/ and derive() runs at file-load time. | 2026-02-21 |
+| Dedup via `os.time()` | Real-time seconds. Game-hours at 60x gave a ~1 frame window. | 2026-03-11 |
+| Sound: SP local, MP broadcast | Prevents double-play. | 2026-03-11 |
+| Player stagger via `setBumpType` | `setSlowFactor`/`setSlowTimer` do not exist in B42. | 2026-03-11 |
+| Mono OGG requirement | PZ `is3D` audio fails silently on stereo. | 2026-02-22 |
 
 ---
 
-## Deferred / Needs In-Game Verification
+## Resolved from the old "Needs Verification" list
 
-| Item | Severity | Notes |
-|------|----------|-------|
-| `sendServerCommand(player, module, cmd, args)` targeted send | CRITICAL | Used in WireNetworkSync. If API signature is wrong, sync won't work. Verify in-game by reconnecting and checking wire network. |
-| `Climate.GetInstance():getRainStrength()` | MODERATE | Used in CamoDegradation. If API unavailable, rain degradation silently no-ops (safe failure). |
-| `Perks.Foraging` enum name | MODERATE | Used in CamoVisibility. If wrong name, getPerkLevel returns nil/0 → all wires appear invisible. |
-| `setOutlineHighlight` / `setOutlineHighlightCol` | MINOR | Used in CamoVisibility for 7+ outline. If unavailable, outline is skipped (safe failure). |
-| BodyPartType.Foot_L enum name | MINOR | Used in TriggerHandlers tanglefootPlayerHandler. If wrong, foot damage silently no-ops. |
-| Issue #12 dist names | MODERATE | `MetalFabrication`/`MetalFabricationStorage` — safe no-op if wrong; logs `kits→0 tables` as signal. |
-| ModOptions UI (PZAPI.ModOptions) | Enhancement | Client-side preferences. API not yet researched. Defer to next sprint. |
+All checked against the installed 42.20 jar in Session 16. This table used to carry six unknowns; four are now answered and two became bugs.
+
+| Item | Verdict |
+|------|---------|
+| `Perks.Foraging` | **WRONG** — it is `Perks.PlantScavenging`. Issue #17 |
+| `Climate.GetInstance():getRainStrength()` | **WRONG** on every identifier. Issue #18 |
+| `Capability.CanBuildAnywhere` | **DOES NOT EXIST**. Issue #14 |
+| `setOutlineHighlight` / `setOutlineHighlightCol` | Exist. Fine |
+| `BodyPartType.Foot_L` | Exists. Fine |
+| Issue #12 dist names | Were wrong, fixed in 4537d2c against verified vanilla names |
+
+Still open: `sendServerCommand(player, module, cmd, args)` targeted send, used in WireNetworkSync. Verify by reconnecting in MP.
 
 ---
 
 ## Session History
 
-### Session 15 (2026-04-14): Gemini art — inventory icons + world sprite pipeline
+### Session 16 (2026-08-05): B42.20.2 audit
 
-- Built `pz_unpack.py` at `c:/xampp/htdocs/pz-tilesheet/` — extracts sprites from .pack files.
-- Unpacked Tiles2x.pack, identified `fencing_damaged_01_1/4.png` as world sprite references.
-- Generated + saved all 4 inventory icons (32x32) via Gemini. Replaced placeholders in mod textures.
-- World sprites in progress. Full-size source PNGs at repo root pending manual crop/resize + tilesheet rebuild.
+Six silent failures found by reading the mod against an installed 42.20 rather than against docs. Three fixed and committed (4537d2c), three filed as #14 through #18. `pz-mod-checker scan` reported clean before and after and caught none of them, which produced pz-mod-checker#23: a spec for a `validate` command that resolves names against the real game.
 
-### Session 14 (2026-03-11): Deferred fixes — float safety, loot guard, north orientation
+Also added `Base.ElectricWire` as a trip-line binding option and widened the Tanglefoot inputs.
 
-- tileKey/registerTile: `math.floor` on all coords. LootDistribution: `isServer()` guard + Issue #12 code.
-- ClientCommands/ServerCommands: `north` param forwarded. 131/131 tests pass.
+### Session 15 (2026-04-14): Gemini inventory icons
 
----
+All 4 inventory icons generated and installed. World sprites still pending.
 
-## To Resume
+### Session 14 (2026-03-11): Float safety, loot guard, north orientation
 
-```
-Deadwire v0.1.1 — all Phase 1 code complete. World sprites being replaced with Gemini art.
-Step 1: Finish world sprites.
-  - Full-size source PNGs sitting at repo root (4 wire types x 2 orientations = 8 files)
-  - Crop/resize each to 64x128px with wire sitting near bottom of canvas
-  - Rebuild tilesheet: python pz_tilesheet.py (in tools/pz-tilesheet/)
-  - Reference images for Gemini prompting: fencing_damaged_01_1.png (east), fencing_damaged_01_4.png (north)
-    at C:\Users\roban\tmp-pz-tiles\ (extracted from Tiles2x.pack via pz_unpack.py)
-Step 2: New save required for sandbox option changes, then in-game test full chain (Sprints 3+4).
-  - Verify door bug fixed, WireNetworkSync on reconnect, camo alpha, rain degradation, Issue #12 dist names
-4 APIs still need in-game verification: sendServerCommand(player,...), Climate.GetInstance():getRainStrength(), Perks.Foraging, setOutlineHighlight.
-After in-game test: ModOptions UI.
-Run tests anytime: run_tests.bat
-```
+`tileKey` floors coords, `isServer()` guard on loot, `north` forwarded. 131/131 tests pass.
