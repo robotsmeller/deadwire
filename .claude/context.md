@@ -142,12 +142,34 @@ Closed #14 through #18:
   the client no longer substitutes a default sound when `soundName` is absent, which
   would have made Tanglefoot audible.
 
-Two bugs found that were not on any issue: `ChurchStorageMisc` did not exist (bells
-silently absent from that table) and both Tier 1 recipes required `Carpentry`, which
-is not a perk — `Woodwork` is. Recipes were likely uncraftable.
+Then five more bugs the verifier found that were on no issue at all:
 
-Unverified in-game still: sprites render, recipes register, loot reachable, sounds
-play. Nothing here was tested against a running game.
+- `ChurchStorageMisc` does not exist — 42.20 has **no church distribution at all**, so
+  bells silently never spawned there. Now `JanitorMisc`.
+- Both Tier 1 recipes required `SkillRequired = Carpentry`, which is not a perk. It is
+  `Woodwork`. The recipes were likely uncraftable.
+- **All three translation files were named `*_EN.json` and were never loaded.**
+  `zombie/core/Translator$1` holds a fixed list of base names and opens
+  `Translate/<LANG>/<NAME>.json`; `ItemName_EN` is not on it. Every item name, recipe
+  name and sandbox label displayed as a raw id, and had since the mod was written. The
+  `_EN` suffix is the B41 `.txt` convention, and it was recorded as correct in the
+  project memory file, which is why three sessions of auditing missed it.
+- No `IG_UI.json` existed, so `DisplayCategory = Deadwire` and recipe
+  `category = Deadwire` showed raw keys.
+- Four sandbox options (`TripLineHealth`, `ReinforcedHealth`, `TinCanBreakOnTrigger`,
+  `FriendlyFireWires`) were declared, translated, shown to players — and read by no
+  code at all. All four now work; `FriendlyFireWires` uses
+  `Faction.isInSameFaction(IsoPlayer, String)`.
+
+Also: `versionMin` 42.0.0 → 42.15.0 (JSON translations need 42.15). `validate_pack.py`
+passes 108/108 on the tilesheet and tiledef id 200 collides with nothing, so the sprite
+blocker is art quality rather than suspected load failure.
+
+Tests 131 → 159. Merged as PRs #19-#23.
+
+**Unverified in-game: everything.** Nothing this session was run against a running
+game. The translation fix is the easiest thing to check — if item names still read
+`Deadwire_TinCanTripLineKit` in the inventory, something else is wrong.
 
 ### Session 16 (2026-08-05): B42.20.2 audit — six silent failures, three fixed
 
@@ -184,14 +206,19 @@ THIS WINDOW:
      python scripts/cmd.py run_lua 'code=<lua>'
    cmd.py splits params on '=', so the code MUST be passed as code=<lua>.
    Check, in order:
-     a. getSprite("deadwire_01_0") .. _7 all non-nil  -> tilesheet actually loaded
-     b. getScriptManager():getItem("Base.Deadwire_TinCanTripLineKit") non-nil
-     c. all four craftRecipes registered (Woodwork:2 now, was the bogus Carpentry:2)
-     d. ProceduralDistributions.list.JanitorMisc contains Base.Bell after world load
-     e. place a wire, walk a zombie into it, hear the sound
-     f. camouflage a wire, check a low-skill character cannot see it and a
+     a. Open the inventory. Item names must read "Tin Can Trip Line Kit", NOT
+        "Deadwire_TinCanTripLineKit". Cheapest possible check that the S17
+        translation fix landed; if it failed, something else is wrong.
+     b. getSprite("deadwire_01_0") .. _7 all non-nil  -> tilesheet actually loaded
+     c. getScriptManager():getItem("Base.Deadwire_TinCanTripLineKit") non-nil
+     d. all four craftRecipes registered (Woodwork:2 now, was the bogus Carpentry:2)
+     e. ProceduralDistributions.list.JanitorMisc contains Base.Bell after world load
+     f. place a wire, walk a zombie into it, hear the sound
+     g. camouflage a wire, check a low-skill character cannot see it and a
         PlantScavenging 7 character can -- this path has NEVER worked before now
-     g. confirm getRainIntensity() really is 0-1 in a live storm (STORM_THRESHOLD=0.8)
+     h. confirm getRainIntensity() really is 0-1 in a live storm (STORM_THRESHOLD=0.8)
+     i. the four revived sandbox options actually bite: set TripLineHealth to 500
+        and confirm a tin can wire takes far more thumps
 
 2. Then the blocker: world sprite ART. The 8 images in deadwire_01 are Session 10
    placeholders. Source PNGs at repo root need crop/resize to 64x128 and a
@@ -202,6 +229,7 @@ THIS WINDOW:
    It sits outside Contents/ so PZ never reads it, but it reads like the manifest
    and is not one. Session 17 misread it as such.
 
-Before any commit that touches names:  python scripts/verify_names.py
-Run tests anytime:                     run_tests.bat   (143 tests)
+Before any commit that touches names:  python scripts/verify_names.py   (107 refs)
+Run tests anytime:                     run_tests.bat                    (159 tests)
+Validate the tilesheet:                python tools/validate_pack.py    (108 checks)
 ```
