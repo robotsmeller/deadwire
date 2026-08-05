@@ -405,6 +405,24 @@ test("reinforced (breakOnTrigger=false): no destroy, cooldown set, WireTriggered
         "broadcast must carry the cooldown duration for clients to mirror")
 end)
 
+test("TinCanBreakOnTrigger=false makes tin can reusable end to end", function()
+    resetAll()
+    SandboxVars.Deadwire.TinCanBreakOnTrigger = false
+    _setOsTime(1000)
+    local sq = _makeSquare(6, 6, 0)
+    DeadwireNetwork.registerTile(6, 6, 0, 1, "tin_can_tripline", "alice")
+
+    local player = _mockPlayer(6, 6, 0, "bob")
+
+    Events.OnClientCommand:Fire("Deadwire", "WireTriggered", player, {
+        x = 6, y = 6, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_destroyedWires, 0, "tin can should survive when the option is off")
+    assert_true(DeadwireNetwork.isOnCooldown(6, 6, 0),
+        "a now-reusable tin can must get a cooldown instead")
+end)
+
 -- #15: detection is necessarily client-side, so the server cannot verify that
 -- a wire fired -- only that the reporter is close enough to have seen it.
 

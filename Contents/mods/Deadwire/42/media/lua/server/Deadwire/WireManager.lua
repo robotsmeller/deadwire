@@ -47,10 +47,11 @@ function DeadwireWireManager.createWire(sq, wireType, ownerId, networkId, north)
 
     -- Create IsoThumpable in the world
     local sprite = getSprite(wireType, north or false)
+    local health = DeadwireConfig.getWireHealth(wireType)
     local obj = IsoThumpable.new(getWorld():getCell(), sq, sprite, north or false, nil)
     obj:setName("DeadwireTripLine")
-    obj:setMaxHealth(defaults.health or 50)
-    obj:setHealth(defaults.health or 50)
+    obj:setMaxHealth(health)
+    obj:setHealth(health)
     obj:setCanPassThrough(true)
     obj:setBlockAllTheSquare(false)
     obj:setIsThumpable(false)

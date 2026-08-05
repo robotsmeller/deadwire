@@ -222,7 +222,7 @@ handlers["WireTriggered"] = function(player, args)
 
     -- State changes based on wire type
     local cooldownSeconds = nil
-    if defaults.breakOnTrigger then
+    if DeadwireConfig.breaksOnTrigger(wireType) then
         -- Single-use: destroy wire
         DeadwireWireManager.destroyWire(args.x, args.y, args.z)
         sendServerCommand(DeadwireConfig.MODULE, "WireDestroyed", {

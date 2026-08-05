@@ -335,3 +335,95 @@ test("WireOwnerImmunity = true, player is NOT owner, trigger fires", function()
 
     DeadwireDetection.playerHandlers["tin_can_tripline"] = nil
 end)
+
+
+-----------------------------------------------------------------
+-- Faction immunity (FriendlyFireWires)
+--
+-- The option shipped in sandbox-options.txt from the start and was read by
+-- nothing at all, so it was a knob on the server settings screen that did
+-- nothing. Default true = a faction mate's wire still triggers.
+-----------------------------------------------------------------
+
+suite("Detection: FriendlyFireWires")
+
+local function withPlayerHandler(wireType, fn)
+    local called = false
+    DeadwireDetection.playerHandlers[wireType] = function() called = true end
+    fn()
+    DeadwireDetection.playerHandlers[wireType] = nil
+    return called
+end
+
+test("default (true): faction mate still triggers the wire", function()
+    _reset()
+    _makeSquare(4, 4, 0)
+    DeadwireNetwork.registerTile(4, 4, 0, 1, "tin_can_tripline", "alice")
+    _setFaction("alice", "Rangers")
+    _setFaction("bob", "Rangers")
+
+    local called = withPlayerHandler("tin_can_tripline", function()
+        Events.OnPlayerUpdate:Fire(_mockPlayer(4, 4, 0, "bob"))
+    end)
+
+    assert_true(called, "friendly fire is on by default")
+end)
+
+test("false: faction mate passes safely", function()
+    _reset()
+    _makeSquare(4, 4, 0)
+    DeadwireNetwork.registerTile(4, 4, 0, 1, "tin_can_tripline", "alice")
+    SandboxVars.Deadwire.FriendlyFireWires = false
+    _setFaction("alice", "Rangers")
+    _setFaction("bob", "Rangers")
+
+    local called = withPlayerHandler("tin_can_tripline", function()
+        Events.OnPlayerUpdate:Fire(_mockPlayer(4, 4, 0, "bob"))
+    end)
+
+    assert_false(called, "faction mate should pass a mate's wire safely")
+end)
+
+test("false: a stranger still triggers the wire", function()
+    _reset()
+    _makeSquare(4, 4, 0)
+    DeadwireNetwork.registerTile(4, 4, 0, 1, "tin_can_tripline", "alice")
+    SandboxVars.Deadwire.FriendlyFireWires = false
+    _setFaction("alice", "Rangers")
+    _setFaction("mallory", "Bandits")
+
+    local called = withPlayerHandler("tin_can_tripline", function()
+        Events.OnPlayerUpdate:Fire(_mockPlayer(4, 4, 0, "mallory"))
+    end)
+
+    assert_true(called, "a rival faction must not get immunity")
+end)
+
+test("false: factionless player still triggers the wire", function()
+    _reset()
+    _makeSquare(4, 4, 0)
+    DeadwireNetwork.registerTile(4, 4, 0, 1, "tin_can_tripline", "alice")
+    SandboxVars.Deadwire.FriendlyFireWires = false
+    _setFaction("alice", "Rangers")
+
+    local called = withPlayerHandler("tin_can_tripline", function()
+        Events.OnPlayerUpdate:Fire(_mockPlayer(4, 4, 0, "nobody"))
+    end)
+
+    assert_true(called, "no faction means no immunity")
+end)
+
+test("false: zombies are unaffected by the faction check", function()
+    _reset()
+    _makeSquare(4, 4, 0)
+    DeadwireNetwork.registerTile(4, 4, 0, 1, "tin_can_tripline", "alice")
+    SandboxVars.Deadwire.FriendlyFireWires = false
+    _setFaction("alice", "Rangers")
+
+    local called = false
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = function() called = true end
+    Events.OnZombieUpdate:Fire(_mockZombie(4, 4, 0, true))
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = nil
+
+    assert_true(called, "faction immunity is player-only")
+end)

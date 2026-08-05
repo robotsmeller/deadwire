@@ -21,6 +21,8 @@ Checked categories (each has hard ground truth in the install):
   Icon = X             media/textures/Item_X.png must exist
   sprite names         this mod's own .tiles.txt tile indices
   tiledef id           in range, and not colliding with a vanilla tilesheet
+  sandbox options      every option declared is read, every key read is declared,
+                       and every declared option has an EN label
 
 Deliberately NOT checked: bare global function names. Many legitimate globals
 are defined in vanilla Lua rather than exposed from Java, so a Java-only check
@@ -29,6 +31,7 @@ reports false positives, and a checker that cries wolf stops being read.
 
 import argparse
 import glob
+import json
 import os
 import re
 import sys
@@ -215,6 +218,75 @@ def check_scripts(rep, jar, items):
                         "expected media/textures/Item_%s.png" % name)
 
 
+# Options whose key is built at runtime rather than written as a literal, so the
+# literal scan below cannot see them. Each must be justified by a real call site.
+DYNAMIC_SANDBOX_KEYS = {
+    "EnableTier0": "Config.isTierEnabled builds the key from the tier number",
+    "EnableTier1": "Config.isTierEnabled",
+    "EnableTier2": "Config.isTierEnabled",
+    "EnableTier3": "Config.isTierEnabled",
+    "EnableTier4": "Config.isTierEnabled",
+    "WireAffectsZombies": "Detection.detectEntity picks the key by entity type",
+    "WireAffectsPlayers": "Detection.detectEntity",
+    "TripLineHealth": "Config.getWireHealth looks it up via healthOptions",
+    "ReinforcedHealth": "Config.getWireHealth via healthOptions",
+}
+
+# Read by Lua and deliberately NOT declared, with a reason. isTierEnabled asks
+# about tiers 2-4, which are Phases 2-4 and have no wire types yet; getSandbox
+# returns the `true` default, which gates nothing because those tiers are empty.
+# Declaring them now would put knobs for absent features on the settings screen.
+# Each must gain a real option as its phase lands.
+UNDECLARED_BY_DESIGN = {
+    "EnableTier2": "Phase 2 (pull-alarms) not implemented",
+    "EnableTier3": "Phase 3 (electric fencing) not implemented, Issue #13",
+    "EnableTier4": "Phase 4 (advanced) not implemented",
+}
+
+
+def check_sandbox_options(rep):
+    """Every option offered to players must be read, and vice versa.
+
+    A key the Lua reads but sandbox-options.txt does not declare is stuck on its
+    hardcoded default forever. A key declared but never read is a knob on the
+    server settings screen that silently does nothing -- which is what
+    TinCanBreakOnTrigger, TripLineHealth and ReinforcedHealth were until
+    Session 17.
+    """
+    used = set()
+    for path in lua_files():
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            code = re.sub(r"--[^\n]*", "", fh.read())
+        used |= set(re.findall(r'getSandbox\(\s*"([A-Za-z0-9_]+)"', code))
+    used |= set(DYNAMIC_SANDBOX_KEYS)
+
+    opts_path = os.path.join(MOD, "sandbox-options.txt")
+    with open(opts_path, encoding="utf-8", errors="replace") as fh:
+        declared = set(re.findall(r"^\s*option\s+Deadwire\.([A-Za-z0-9_]+)",
+                                  fh.read(), re.M))
+
+    for key in sorted(used - declared - set(UNDECLARED_BY_DESIGN)):
+        rep.bad("sandbox option", key, "sandbox-options.txt",
+                "read by Lua but not declared -- permanently stuck on its default")
+    for key in sorted(declared - used):
+        rep.bad("sandbox option", key, "sandbox-options.txt",
+                "declared but never read -- a knob that does nothing")
+    for key in sorted(used & declared):
+        rep.ok("sandbox option", key)
+
+    # Every declared option needs an EN label or the settings screen shows the key.
+    tr_path = os.path.join(MOD, "lua", "shared", "Translate", "EN", "Sandbox_EN.json")
+    with open(tr_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    table = data.get("Sandbox_EN", data)
+    translated = {k[len("Sandbox_Deadwire_"):] for k in table
+                  if k.startswith("Sandbox_Deadwire_")
+                  and not k.endswith("_tooltip") and "_option" not in k}
+    for key in sorted(declared - translated):
+        rep.bad("sandbox translation", key, "Translate/EN/Sandbox_EN.json",
+                "declared option has no EN label")
+
+
 def check_config_sprites(rep):
     """Config.Sprites must name tiles the shipped tilesheet defines."""
     sprites = mod_sprites()
@@ -309,6 +381,7 @@ def main():
     rep = Report()
     check_lua(rep, jar, items, dists)
     check_scripts(rep, jar, items)
+    check_sandbox_options(rep)
     check_config_sprites(rep)
     check_modinfo(rep, args.pz)
 

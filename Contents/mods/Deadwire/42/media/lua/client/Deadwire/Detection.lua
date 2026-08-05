@@ -61,6 +61,21 @@ local function detectEntity(entity, isZombie)
         if username and wire.ownerId == username then return end
     end
 
+    -- Player-only: faction immunity. FriendlyFireWires defaults to true, meaning
+    -- a faction mate's wire DOES trigger; turning it off makes the perimeter safe
+    -- for the group. The option shipped in sandbox-options.txt and was read by
+    -- nothing at all until now, so it was a settings-screen knob that did nothing.
+    --
+    -- isInSameFaction(IsoPlayer, String) is the overload that matters: the wire
+    -- stores its owner as a username, and that owner may be offline with no
+    -- IsoPlayer to compare against.
+    if not isZombie and not DeadwireConfig.getSandbox("FriendlyFireWires", true) then
+        if wire.ownerId and Faction.isInSameFaction(entity, wire.ownerId) then
+            DeadwireConfig.debugLog("Faction mate passed wire at " .. x .. "," .. y)
+            return
+        end
+    end
+
     -- De-duplicate: prevent same entity from firing multiple triggers
     -- within the same tick cycle (MP latency means cooldown may not be
     -- set on client yet). Uses timestamp with 1-second expiry window.

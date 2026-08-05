@@ -123,6 +123,39 @@ function DeadwireConfig.getSandbox(key, default)
     return default
 end
 
+-- Per-type property overrides.
+--
+-- WireDefaults has always been commented "(overridden by SandboxVars)" but
+-- nothing ever read these three options, so the server settings screen offered
+-- players three knobs that did nothing at all. Each option's declared default
+-- in sandbox-options.txt already matches the WireDefaults value it shadows.
+--
+-- Bell deliberately has no health option: the tooltip for ReinforcedHealth says
+-- "reinforced trip lines", and inventing a second meaning for it would be worse
+-- than the gap. Bell keeps the WireDefaults value.
+
+local healthOptions = {
+    tin_can_tripline    = "TripLineHealth",
+    reinforced_tripline = "ReinforcedHealth",
+}
+
+function DeadwireConfig.getWireHealth(wireType)
+    local defaults = DeadwireConfig.WireDefaults[wireType]
+    local fallback = (defaults and defaults.health) or 50
+    local key = healthOptions[wireType]
+    if not key then return fallback end
+    return DeadwireConfig.getSandbox(key, fallback)
+end
+
+function DeadwireConfig.breaksOnTrigger(wireType)
+    local defaults = DeadwireConfig.WireDefaults[wireType]
+    local fallback = (defaults and defaults.breakOnTrigger) or false
+    if wireType == DeadwireConfig.WireTypes.TIN_CAN then
+        return DeadwireConfig.getSandbox("TinCanBreakOnTrigger", fallback)
+    end
+    return fallback
+end
+
 -- Check if a tier is enabled
 function DeadwireConfig.isTierEnabled(tier)
     if not DeadwireConfig.getSandbox("EnableMod", true) then
