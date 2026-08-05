@@ -280,3 +280,80 @@ test("debugLog handles non-string argument without throwing", function()
     DeadwireConfig.debugLog(true)
     DeadwireConfig.DEBUG = prev
 end)
+
+
+-----------------------------------------------------------------
+-- Per-type SandboxVars overrides
+--
+-- These three options existed in sandbox-options.txt and were shown to players
+-- on the server settings screen, but nothing in the mod ever read them, so
+-- setting them did nothing. Regression tests for that.
+-----------------------------------------------------------------
+
+suite("DeadwireConfig.getWireHealth")
+
+test("falls back to WireDefaults when the option is unset", function()
+    _reset()
+    assert_eq(DeadwireConfig.getWireHealth("tin_can_tripline"),
+        DeadwireConfig.WireDefaults.tin_can_tripline.health)
+    assert_eq(DeadwireConfig.getWireHealth("reinforced_tripline"),
+        DeadwireConfig.WireDefaults.reinforced_tripline.health)
+end)
+
+test("TripLineHealth overrides tin can health", function()
+    _reset()
+    SandboxVars.Deadwire.TripLineHealth = 400
+    assert_eq(DeadwireConfig.getWireHealth("tin_can_tripline"), 400)
+end)
+
+test("ReinforcedHealth overrides reinforced health", function()
+    _reset()
+    SandboxVars.Deadwire.ReinforcedHealth = 900
+    assert_eq(DeadwireConfig.getWireHealth("reinforced_tripline"), 900)
+end)
+
+test("the two health options do not bleed into each other", function()
+    _reset()
+    SandboxVars.Deadwire.TripLineHealth = 400
+    SandboxVars.Deadwire.ReinforcedHealth = 900
+    assert_eq(DeadwireConfig.getWireHealth("tin_can_tripline"), 400)
+    assert_eq(DeadwireConfig.getWireHealth("reinforced_tripline"), 900)
+end)
+
+test("bell is unaffected by ReinforcedHealth (no option of its own)", function()
+    _reset()
+    SandboxVars.Deadwire.ReinforcedHealth = 900
+    assert_eq(DeadwireConfig.getWireHealth("bell_tripline"),
+        DeadwireConfig.WireDefaults.bell_tripline.health)
+end)
+
+test("unknown wire type returns the 50 fallback without throwing", function()
+    _reset()
+    assert_eq(DeadwireConfig.getWireHealth("definitely_not_a_wire"), 50)
+end)
+
+
+suite("DeadwireConfig.breaksOnTrigger")
+
+test("tin can breaks by default", function()
+    _reset()
+    assert_true(DeadwireConfig.breaksOnTrigger("tin_can_tripline"))
+end)
+
+test("TinCanBreakOnTrigger=false makes tin can reusable", function()
+    _reset()
+    SandboxVars.Deadwire.TinCanBreakOnTrigger = false
+    assert_false(DeadwireConfig.breaksOnTrigger("tin_can_tripline"))
+end)
+
+test("reusable wires are unaffected by TinCanBreakOnTrigger", function()
+    _reset()
+    SandboxVars.Deadwire.TinCanBreakOnTrigger = true
+    assert_false(DeadwireConfig.breaksOnTrigger("reinforced_tripline"))
+    assert_false(DeadwireConfig.breaksOnTrigger("bell_tripline"))
+end)
+
+test("unknown wire type does not break and does not throw", function()
+    _reset()
+    assert_false(DeadwireConfig.breaksOnTrigger("definitely_not_a_wire"))
+end)

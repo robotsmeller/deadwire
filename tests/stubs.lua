@@ -147,6 +147,24 @@ os.time = function() return _osTime end
 function _setOsTime(t) _osTime = t end   -- test control
 
 -----------------------------------------------------------------
+-- Faction stub (Detection.lua faction immunity)
+-- Real signature: Faction.isInSameFaction(IsoPlayer, String) -> boolean.
+-- Tests declare membership by username via _setFaction.
+-----------------------------------------------------------------
+local _factions = {}   -- username -> faction name
+
+Faction = {
+    isInSameFaction = function(player, ownerUsername)
+        if not player or not ownerUsername then return false end
+        local mine = _factions[player:getUsername()]
+        return mine ~= nil and mine == _factions[ownerUsername]
+    end,
+}
+
+function _setFaction(username, factionName) _factions[username] = factionName end
+function _clearFactions() _factions = {} end
+
+-----------------------------------------------------------------
 -- PZ capability system stub
 -- UseBuildCheat is the real 42.20 name. CanBuildAnywhere, which this stub
 -- used to declare, does not exist in the game -- so the stub was validating
@@ -275,6 +293,7 @@ function _reset()
     _sentServer = {}
     _sentClient = {}
     _soundCalls = {}
+    _factions = {}
     SandboxVars = { Deadwire = {} }
     -- Reset WireNetwork internal state (if loaded)
     if DeadwireNetwork then DeadwireNetwork.clear() end
