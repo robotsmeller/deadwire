@@ -5,30 +5,33 @@
 -- ServerCommands.lua WireTriggered handler — not here.
 --
 -- Degradation model:
---   - Rain strength 0.0-0.8: degrade = floor(baseRate * rainStrength)
---   - Rain strength 0.8+:    degrade = floor(baseRate * stormMult)
+--   - Rain intensity 0.0-0.8: degrade = floor(baseRate * rainIntensity)
+--   - Rain intensity 0.8+:    degrade = floor(baseRate * stormMult)
 --   - When durability hits 0: camo removed, WireCamouflaged broadcast to all clients
 --
--- NOTE: Climate.GetInstance():getRainStrength() — verify API name in-game.
---       Alternative: getWorld():getWeather():getRainStrength()
+-- The old implementation called Climate.GetInstance():getRainStrength(). No part
+-- of that exists in 42.20: there is no `Climate` global, and no getRainStrength
+-- on anything. Both guards failed silently and the function always returned 0, so
+-- camouflage never degraded from weather at all. Verified against 42.20 (Issue #18).
+--
+-- The real API is getClimateManager():getRainIntensity(), returning a float.
+-- Range is 0.0-1.0: ClimateManager's sibling intensity getters are used that way
+-- throughout vanilla (forageSystem rounds getPrecipitationIntensity() to one
+-- decimal and multiplies chances by it; Bobber.lua tests getFogIntensity() >= 0.4),
+-- which is what STORM_THRESHOLD below assumes.
+-- getPrecipitationIntensity() is the near-equivalent that also counts snow.
 
 require "Deadwire/Config"
 require "Deadwire/WireNetwork"
 
 -----------------------------------------------------------
--- Get current rain strength (0.0 = dry, 1.0+ = heavy rain)
+-- Get current rain intensity (0.0 = dry, 1.0 = heaviest)
 -----------------------------------------------------------
 
-local function getRainStrength()
-    -- Try Climate API (primary B42 weather system)
-    if Climate and Climate.GetInstance then
-        local climate = Climate.GetInstance()
-        if climate and climate.getRainStrength then
-            return climate:getRainStrength() or 0
-        end
-    end
-    -- Fallback: not raining if API unavailable
-    return 0
+local function getRainIntensity()
+    local climate = getClimateManager()
+    if not climate then return 0 end
+    return climate:getRainIntensity() or 0
 end
 
 -----------------------------------------------------------
@@ -38,18 +41,18 @@ end
 local function onEveryTenMinutes()
     if not DeadwireConfig.getSandbox("EnableCamouflage", true) then return end
 
-    local rainStrength = getRainStrength()
-    if rainStrength <= 0 then return end
+    local rainIntensity = getRainIntensity()
+    if rainIntensity <= 0 then return end
 
     local baseRate    = DeadwireConfig.getSandbox("CamoRainDegradeRate",  5)
     local stormMult   = DeadwireConfig.getSandbox("CamoStormMultiplier",  2.0)
     local STORM_THRESHOLD = 0.8
 
     local effective
-    if rainStrength >= STORM_THRESHOLD then
+    if rainIntensity >= STORM_THRESHOLD then
         effective = math.floor(baseRate * stormMult)
     else
-        effective = math.floor(baseRate * rainStrength)
+        effective = math.floor(baseRate * rainIntensity)
     end
 
     if effective <= 0 then return end
@@ -82,7 +85,7 @@ local function onEveryTenMinutes()
 
     if #toRemove > 0 then
         DeadwireConfig.log("CamoDegradation: " .. #toRemove
-            .. " wire(s) lost camouflage from rain (strength=" .. rainStrength .. ")")
+            .. " wire(s) lost camouflage from rain (intensity=" .. rainIntensity .. ")")
     end
 end
 

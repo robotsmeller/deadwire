@@ -35,6 +35,11 @@ DeadwireConfig.Tiers = {
 
 -----------------------------------------------------------
 -- Wire Property Defaults (overridden by SandboxVars)
+--
+-- cooldownSeconds is REAL seconds, not game time. See the cooldown section of
+-- WireNetwork.lua for why (#16). Reinforced and Bell currently differ only in
+-- sound clip and radius; the cooldown is the obvious lever to separate them
+-- and is deliberately left equal pending a balance decision.
 -----------------------------------------------------------
 DeadwireConfig.WireDefaults = {
     tin_can_tripline = {

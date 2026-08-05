@@ -22,8 +22,8 @@ module Base
         time = 200,
         Tags = AnySurfaceCraft,
         category = Deadwire,
-        SkillRequired = Carpentry:2;Trapping:2,
-        xpAward = Carpentry:15;Trapping:15,
+        SkillRequired = Woodwork:2;Trapping:2,
+        xpAward = Woodwork:15;Trapping:15,
         inputs
         {
             item 1 [Base.Wire],
@@ -42,8 +42,8 @@ module Base
         time = 200,
         Tags = AnySurfaceCraft,
         category = Deadwire,
-        SkillRequired = Carpentry:2;Trapping:2,
-        xpAward = Carpentry:15;Trapping:15,
+        SkillRequired = Woodwork:2;Trapping:2,
+        xpAward = Woodwork:15;Trapping:15,
         inputs
         {
             item 1 [Base.Wire],

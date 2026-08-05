@@ -10,14 +10,41 @@ local function getSpawnChance()
     return chances[rate] or 12
 end
 
+-- Append `item` at `chance` to each named distribution, returning how many
+-- took it.
+--
+-- A missing name is logged loudly rather than skipped in silence. Every bug
+-- this file has had was a name that resolved to nil and produced an absent
+-- feature with a clean log; a warning here is what makes the next one visible
+-- the first time the world generates.
+local function addToDistributions(distNames, item, chance)
+    local count = 0
+    for _, distName in ipairs(distNames) do
+        local dist = ProceduralDistributions.list[distName]
+        if dist and dist.items then
+            table.insert(dist.items, item)
+            table.insert(dist.items, chance)
+            count = count + 1
+        else
+            DeadwireConfig.log("LootDistribution: WARNING no distribution '"
+                .. distName .. "' -- " .. item .. " will not spawn there")
+        end
+    end
+    return count
+end
+
 local function preDistributionMerge()
     if not isServer() then return end
     if not DeadwireConfig.getSandbox("EnableMod", true) then return end
 
     local chance = getSpawnChance()
 
-    -- Bell loot: general utility/farm locations
-    -- Names verified against vanilla ProceduralDistributions.lua on 42.20
+    -- Bell loot: general utility/farm locations.
+    -- ChurchStorageMisc used to be in this list and does not exist -- 42.20 has
+    -- no church distribution at all. It was added as a "verified" replacement
+    -- for the equally nonexistent ChurchMisc and silently spawned nothing.
+    -- Every name below is checked by scripts/verify_names.py against the
+    -- installed game; run that rather than adding a name by eye.
     local bellDists = {
         "FarmerTools",
         "BarnTools",
@@ -25,20 +52,10 @@ local function preDistributionMerge()
         "GardenStoreTools",
         "SchoolLockers",
         "OfficeDeskHome",
-        "ChurchStorageMisc",
+        "JanitorMisc",
     }
 
-    local bellCount = 0
-    for _, distName in ipairs(bellDists) do
-        if ProceduralDistributions.list[distName] then
-            table.insert(ProceduralDistributions.list[distName].items, "Base.Bell")
-            table.insert(ProceduralDistributions.list[distName].items, chance)
-            bellCount = bellCount + 1
-        end
-    end
-
     -- Issue #12: ReinforcedTripLineKit in metalworking locations
-    -- Names verified against vanilla ProceduralDistributions.lua on 42.20
     local kitDists = {
         "MetalShopTools",
         "MetalWorkerTools",
@@ -46,14 +63,9 @@ local function preDistributionMerge()
         "GarageMetalwork",
     }
 
-    local kitCount = 0
-    for _, distName in ipairs(kitDists) do
-        if ProceduralDistributions.list[distName] then
-            table.insert(ProceduralDistributions.list[distName].items, "Base.Deadwire_ReinforcedTripLineKit")
-            table.insert(ProceduralDistributions.list[distName].items, chance)
-            kitCount = kitCount + 1
-        end
-    end
+    local bellCount = addToDistributions(bellDists, "Base.Bell", chance)
+    local kitCount  = addToDistributions(kitDists,
+        "Base.Deadwire_ReinforcedTripLineKit", chance)
 
     DeadwireConfig.log("LootDistribution: bells→" .. bellCount .. " tables, kits→" .. kitCount .. " tables (chance=" .. chance .. ")")
 end

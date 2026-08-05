@@ -34,6 +34,18 @@ local function resetAll()
     _clearCommands()
 end
 
+-- A player holding the kit for `wireType` (default: tin can).
+--
+-- PlaceWire now refuses a player who is not carrying the kit (#15), so every
+-- PlaceWire test needs one -- otherwise the no-op tests below would pass
+-- because the player is empty-handed rather than because of the condition
+-- each is actually meant to exercise.
+local function _kittedPlayer(x, y, z, name, wireType)
+    local player = _mockPlayer(x, y, z, name)
+    _giveItem(player, DeadwireConfig.KitItems[wireType or "tin_can_tripline"])
+    return player
+end
+
 -----------------------------------------------------------------
 -- PlaceWire tests
 -----------------------------------------------------------------
@@ -42,7 +54,7 @@ suite("ServerCommands: PlaceWire")
 test("valid args and empty tile: createWire called, WirePlaced broadcast sent", function()
     resetAll()
     local sq = _makeSquare(10, 20, 0)
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
@@ -64,7 +76,7 @@ end)
 test("missing wireType: no-op", function()
     resetAll()
     local sq = _makeSquare(10, 20, 0)
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0
@@ -77,7 +89,7 @@ end)
 
 test("missing position: no-op", function()
     resetAll()
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         wireType = "tin_can_tripline"
@@ -90,7 +102,7 @@ end)
 test("unknown wireType: no-op", function()
     resetAll()
     local sq = _makeSquare(10, 20, 0)
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0, wireType = "definitely_not_a_wire"
@@ -102,7 +114,7 @@ end)
 test("no square at position: no-op", function()
     resetAll()
     -- Square at (99,99,0) is NOT created, so getCell():getGridSquare returns nil
-    local player = _mockPlayer(0, 0, 0, "alice")
+    local player = _kittedPlayer(0, 0, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 99, y = 99, z = 0, wireType = "tin_can_tripline"
@@ -117,7 +129,7 @@ test("tile already occupied: no-op", function()
     -- Pre-register a wire so the tile is occupied
     DeadwireNetwork.registerTile(10, 20, 0, 99, "tin_can_tripline", "bob")
 
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
@@ -136,7 +148,7 @@ test("player at wire limit (WireMaxPerPlayer=1, one wire already placed): no-op"
     SandboxVars.Deadwire.WireMaxPerPlayer = 1
 
     local sq2 = _makeSquare(2, 2, 0)
-    local player = _mockPlayer(2, 2, 0, "alice")
+    local player = _kittedPlayer(2, 2, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 2, y = 2, z = 0, wireType = "tin_can_tripline"
@@ -150,7 +162,7 @@ test("disabled tier (EnableTier0=false, tin_can): no-op", function()
     SandboxVars.Deadwire.EnableTier0 = false
 
     local sq = _makeSquare(10, 20, 0)
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
@@ -164,13 +176,72 @@ test("EnableMod=false: no-op", function()
     SandboxVars.Deadwire.EnableMod = false
 
     local sq = _makeSquare(10, 20, 0)
-    local player = _mockPlayer(10, 20, 0, "alice")
+    local player = _kittedPlayer(10, 20, 0, "alice")
 
     Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
         x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
     })
 
     assert_eq(#_createdWires, 0, "createWire should NOT be called when mod is disabled")
+end)
+
+-- #15: PlaceWire is a plain server command, so a modified client can send it
+-- without ever having crafted anything. The server must check the inventory.
+
+test("player without the kit: no-op (#15)", function()
+    resetAll()
+    local sq = _makeSquare(10, 20, 0)
+    local player = _mockPlayer(10, 20, 0, "mallory")   -- empty-handed
+
+    Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
+        x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_createdWires, 0, "createWire should NOT be called without a kit")
+    assert_nil(_findServerCmd("WirePlaced"), "WirePlaced should NOT have been sent")
+end)
+
+test("holding the wrong kit does not authorize placement (#15)", function()
+    resetAll()
+    local sq = _makeSquare(10, 20, 0)
+    local player = _mockPlayer(10, 20, 0, "mallory")
+    _giveItem(player, DeadwireConfig.KitItems.bell_tripline)
+
+    Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
+        x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_createdWires, 0, "a bell kit must not place a tin can wire")
+end)
+
+test("successful placement consumes exactly one kit (#15)", function()
+    resetAll()
+    local sq = _makeSquare(10, 20, 0)
+    local player = _kittedPlayer(10, 20, 0, "alice")
+    _giveItem(player, DeadwireConfig.KitItems.tin_can_tripline)   -- two in total
+
+    Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
+        x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_createdWires, 1, "createWire should have been called")
+    assert_eq(_countItems(player, DeadwireConfig.KitItems.tin_can_tripline), 1,
+        "exactly one kit should have been consumed")
+end)
+
+test("failed placement consumes no kit (#15)", function()
+    resetAll()
+    local sq = _makeSquare(10, 20, 0)
+    DeadwireNetwork.registerTile(10, 20, 0, 99, "tin_can_tripline", "bob")  -- occupied
+    local player = _kittedPlayer(10, 20, 0, "alice")
+
+    Events.OnClientCommand:Fire("Deadwire", "PlaceWire", player, {
+        x = 10, y = 20, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_createdWires, 0, "placement should have been refused")
+    assert_eq(_countItems(player, DeadwireConfig.KitItems.tin_can_tripline), 1,
+        "kit must survive a refused placement")
 end)
 
 -----------------------------------------------------------------
@@ -214,6 +285,37 @@ test("non-owner, non-admin cannot remove wire: no-op", function()
 
     assert_eq(#_destroyedWires, 0, "non-owner should not be able to remove wire")
     assert_nil(_findServerCmd("WireDestroyed"))
+end)
+
+-- #14: the old check called Capability.CanBuildAnywhere, which does not exist
+-- in 42.20, and called it on getRole() without a nil guard.
+
+test("non-owner with no role is denied, not an error (#14)", function()
+    resetAll()
+    local sq = _makeSquare(5, 5, 0)
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice")
+
+    local player = _mockRolelessPlayer(5, 5, 0, "bob")
+
+    Events.OnClientCommand:Fire("Deadwire", "RemoveWire", player, {
+        x = 5, y = 5, z = 0
+    })
+
+    assert_eq(#_destroyedWires, 0, "roleless non-owner must be denied")
+end)
+
+test("owner with no role can still remove their own wire (#14)", function()
+    resetAll()
+    local sq = _makeSquare(5, 5, 0)
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice")
+
+    local player = _mockRolelessPlayer(5, 5, 0, "alice")
+
+    Events.OnClientCommand:Fire("Deadwire", "RemoveWire", player, {
+        x = 5, y = 5, z = 0
+    })
+
+    assert_eq(#_destroyedWires, 1, "ownership must not depend on having a role")
 end)
 
 test("admin removes any wire: destroyWire called", function()
@@ -279,7 +381,7 @@ test("reinforced (breakOnTrigger=false): no destroy, cooldown set, WireTriggered
     local sq = _makeSquare(7, 7, 0)
     DeadwireNetwork.registerTile(7, 7, 0, 1, "reinforced_tripline", "alice")
 
-    _setWorldAge(0)
+    _setOsTime(1000)
     local player = _mockPlayer(7, 7, 0, "bob")
 
     Events.OnClientCommand:Fire("Deadwire", "WireTriggered", player, {
@@ -295,6 +397,80 @@ test("reinforced (breakOnTrigger=false): no destroy, cooldown set, WireTriggered
     local trigCmd = _findServerCmd("WireTriggered")
     assert_not_nil(trigCmd, "WireTriggered sound broadcast should be sent")
     assert_eq(trigCmd.args.soundName, DeadwireConfig.Sounds.WIRE_RATTLE)
+
+    -- Clients run detection against their own copy of the network, so the
+    -- cooldown has to travel with the broadcast or it only exists server-side.
+    assert_eq(trigCmd.args.cooldownSeconds,
+        DeadwireConfig.WireDefaults.reinforced_tripline.cooldownSeconds,
+        "broadcast must carry the cooldown duration for clients to mirror")
+end)
+
+-- #15: detection is necessarily client-side, so the server cannot verify that
+-- a wire fired -- only that the reporter is close enough to have seen it.
+
+test("trigger report from a distant player is rejected (#15)", function()
+    resetAll()
+    local sq = _makeSquare(6, 6, 0)
+    _makeSquare(200, 200, 0)
+    DeadwireNetwork.registerTile(6, 6, 0, 1, "tin_can_tripline", "alice")
+
+    local mallory = _mockPlayer(200, 200, 0, "mallory")
+
+    Events.OnClientCommand:Fire("Deadwire", "WireTriggered", mallory, {
+        x = 6, y = 6, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_destroyedWires, 0, "a distant client must not destroy a wire")
+    assert_nil(_findServerCmd("WireDestroyed"))
+    assert_nil(_findServerCmd("WireTriggered"))
+end)
+
+test("trigger report from a different floor is rejected (#15)", function()
+    resetAll()
+    _makeSquare(6, 6, 0)
+    _makeSquare(6, 6, 1)
+    DeadwireNetwork.registerTile(6, 6, 0, 1, "tin_can_tripline", "alice")
+
+    local mallory = _mockPlayer(6, 6, 1, "mallory")   -- directly above
+
+    Events.OnClientCommand:Fire("Deadwire", "WireTriggered", mallory, {
+        x = 6, y = 6, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_destroyedWires, 0, "z must be an exact match, not a distance")
+end)
+
+test("trigger report from an adjacent tile is accepted (#15)", function()
+    resetAll()
+    _makeSquare(6, 6, 0)
+    _makeSquare(8, 7, 0)
+    DeadwireNetwork.registerTile(6, 6, 0, 1, "tin_can_tripline", "alice")
+
+    local player = _mockPlayer(8, 7, 0, "bob")   -- 2 tiles away, within range
+
+    Events.OnClientCommand:Fire("Deadwire", "WireTriggered", player, {
+        x = 6, y = 6, z = 0, wireType = "tin_can_tripline"
+    })
+
+    assert_eq(#_destroyedWires, 1, "a nearby player's report must still be honoured")
+end)
+
+test("camo is not degraded by a distant trigger report (#15)", function()
+    resetAll()
+    _makeSquare(6, 6, 0)
+    _makeSquare(200, 200, 0)
+    DeadwireNetwork.registerTile(6, 6, 0, 1, "reinforced_tripline", "alice")
+    DeadwireNetwork.setCamouflaged(6, 6, 0, true, 100)
+    SandboxVars.Deadwire.CamoTriggerDegrade = 15
+
+    local mallory = _mockPlayer(200, 200, 0, "mallory")
+
+    Events.OnClientCommand:Fire("Deadwire", "WireTriggered", mallory, {
+        x = 6, y = 6, z = 0, wireType = "reinforced_tripline"
+    })
+
+    assert_eq(DeadwireNetwork.getTile(6, 6, 0).camoDurability, 100,
+        "remote reports must not burn down camouflage")
 end)
 
 test("wire with camo (durability=100, degrade=15): durability reduced to 85, no WireCamouflaged", function()

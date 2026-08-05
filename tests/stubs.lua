@@ -148,8 +148,12 @@ function _setOsTime(t) _osTime = t end   -- test control
 
 -----------------------------------------------------------------
 -- PZ capability system stub
+-- UseBuildCheat is the real 42.20 name. CanBuildAnywhere, which this stub
+-- used to declare, does not exist in the game -- so the stub was validating
+-- a call that could never work. Deliberately the only key defined: any other
+-- Capability.X in mod code resolves to nil here and fails loudly.
 -----------------------------------------------------------------
-Capability = { CanBuildAnywhere = "CanBuildAnywhere" }
+Capability = { UseBuildCheat = "UseBuildCheat" }
 
 -----------------------------------------------------------------
 -- Sound stubs (no-op; we only care about logic, not audio)
@@ -184,14 +188,58 @@ function _mockZombie(x, y, z, alive)
     }
 end
 
+-- Inventory stub: only the container methods Deadwire actually calls.
+local function _makeInventory()
+    local inv = { _items = {} }
+    inv.getFirstTypeRecurse = function(self, fullType)
+        for _, it in ipairs(self._items) do
+            if it.fullType == fullType then return it end
+        end
+        return nil
+    end
+    inv.getItemsFromFullType = function(self, fullType, _recurse)
+        local found = {}
+        for _, it in ipairs(self._items) do
+            if it.fullType == fullType then table.insert(found, it) end
+        end
+        return {
+            size = function() return #found end,
+            get  = function(_, i) return found[i + 1] end,
+        }
+    end
+    inv.Remove = function(self, item)
+        for i, it in ipairs(self._items) do
+            if it == item then table.remove(self._items, i); return end
+        end
+    end
+    return inv
+end
+
+-- Put an item in a mock player's inventory. Returns the item table.
+function _giveItem(player, fullType)
+    local item = { fullType = fullType }
+    table.insert(player:getInventory()._items, item)
+    return item
+end
+
+function _countItems(player, fullType)
+    local n = 0
+    for _, it in ipairs(player:getInventory()._items) do
+        if it.fullType == fullType then n = n + 1 end
+    end
+    return n
+end
+
 function _mockPlayer(x, y, z, username)
     local modData = {}
     local sq = _squares[x .. "," .. y .. "," .. z]
+    local inv = _makeInventory()
     return {
         isAlive       = function() return true end,
         getSquare     = function() return sq end,
         getModData    = function() return modData end,
         getUsername   = function() return username or "testplayer" end,
+        getInventory  = function() return inv end,
         isAccessLevel = function() return false end,
         getRole       = function() return {
             hasCapability = function() return false end
@@ -203,8 +251,16 @@ function _mockAdmin(x, y, z, username)
     local p = _mockPlayer(x, y, z, username)
     p.isAccessLevel = function() return true end
     p.getRole = function() return {
-        hasCapability = function() return true end
+        hasCapability = function(_, cap) return cap == Capability.UseBuildCheat end
     } end
+    return p
+end
+
+-- A player whose getRole() returns nil, as happens in single player. This used
+-- to throw on `player:getRole():hasCapability(...)`.
+function _mockRolelessPlayer(x, y, z, username)
+    local p = _mockPlayer(x, y, z, username)
+    p.getRole = function() return nil end
     return p
 end
 

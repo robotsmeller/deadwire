@@ -38,18 +38,30 @@ local function onServerCommand(module, command, args)
 end
 
 -----------------------------------------------------------
--- WireTriggered: Play sound effect at wire location
+-- WireTriggered: Play sound effect and apply the server's cooldown
+--
+-- Detection (Detection.lua) checks isOnCooldown against this client's own
+-- WireNetwork copy, so the server's cooldown has to be mirrored here or the
+-- wire re-arms immediately on every client in MP.
 -----------------------------------------------------------
 
 handlers["WireTriggered"] = function(args)
+    if not hasPosition(args) then return end
+
+    if args.cooldownSeconds then
+        DeadwireNetwork.setCooldown(args.x, args.y, args.z, args.cooldownSeconds)
+    end
+
+    -- No soundName means a silent trap (tanglefoot). Do not substitute one:
+    -- the previous default of TIN_CAN_RATTLE would have made it audible.
+    if not args.soundName then return end
+
     local sq = getSquareFromArgs(args)
     if not sq then return end
 
-    local soundName = args.soundName or DeadwireConfig.Sounds.TIN_CAN_RATTLE
     local audioRadius = args.audioRadius or 15
-
-    getSoundManager():PlayWorldSound(soundName, sq, 0, audioRadius, 1.0, false)
-    DeadwireConfig.debugLog("Sound: " .. soundName .. " at " .. args.x .. "," .. args.y .. "," .. args.z)
+    getSoundManager():PlayWorldSound(args.soundName, sq, 0, audioRadius, 1.0, false)
+    DeadwireConfig.debugLog("Sound: " .. args.soundName .. " at " .. args.x .. "," .. args.y .. "," .. args.z)
 end
 
 -----------------------------------------------------------
