@@ -113,10 +113,11 @@ green tick. It now derives both category prefixes from the game's own
 `validate_pack.py`, which hardcoded "8 sprites" and failed the moment a
 legitimate 9th and 10th were added.
 
-**The auto-memory note that recorded `IGUI_CraftCategory_` as correct was
-wrong.** That is the second time a wrong note in memory outlived the code
-(Session 17 found the `_EN` suffix note doing the same thing). Treat
-`scripts/verify_names.py` output as truth, not the notes.
+The wrong prefix lived in exactly two places, the mod's `IG_UI.json` and
+`verify_names.py`, and they agreed with each other. Nothing else in the repo or
+in auto-memory recorded it, so there was no third source to catch the
+disagreement. That is the shape to watch for: a checker and its subject sharing
+one unverified assumption looks identical to a passing test.
 
 ### Inventory icons had opaque backgrounds
 
