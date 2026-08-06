@@ -7,8 +7,7 @@
 **Before ANY work**, Claude MUST:
 
 1. **Read context files:**
-   - `.claude/context.md` - Project state, recent changes
-   - `HANDOFF.md` - Current priority, blockers, decisions
+   - `.claude/context.md` - Single handoff file: state, priority, blockers, decisions
    - `.claude/rules/development-workflow.md` - How we work
 
 2. **Check GitHub Issues:**
@@ -20,7 +19,7 @@
    ```
    Deadwire ready. [X] open issues. Priority: [continue_with]
    Session: [N]
-   Files loaded: context.md, HANDOFF.md, development-workflow.md
+   Files loaded: context.md, development-workflow.md
    ```
 
 **DO NOT skip. DO NOT begin work without this confirmation.**
@@ -32,8 +31,7 @@
 Before ending ANY session:
 
 1. **Tasks → GitHub Issues** (incomplete work = new issue)
-2. **Update context.md** (what was done, increment session)
-3. **Update HANDOFF.md** (current state, next steps)
+2. **Update context.md** (what was done, increment session, next steps)
 4. **Clean workspace** (temp files, empty dirs)
 5. **Commit and push**
 6. **Tell user:** `Continue with [next priority]`
@@ -104,8 +102,7 @@ Do NOT wait for the user to ask.
 
 | File | Purpose | When to Read |
 |------|---------|--------------|
-| `.claude/context.md` | Project state | Session start |
-| `HANDOFF.md` | Current priority, blockers | Session start |
+| `.claude/context.md` | Project state, priority, blockers | Session start |
 | `.claude/rules/development-workflow.md` | How we work | Session start |
 | `docs/DESIGN.md` | Game design document | Understanding features |
 | `docs/IMPLEMENTATION-PLAN.md` | Technical plan with code | Before coding |

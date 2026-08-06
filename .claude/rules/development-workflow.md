@@ -118,8 +118,7 @@ gh issue close <number> --comment "Completed in <commit>"
 **Before ending any session:**
 
 1. **Ensure all tasks are GitHub Issues**
-2. **Update context.md** with what was done
-3. **Update HANDOFF.md** with current state
+2. **Update context.md** with what was done and the current state
 4. **Clean the workspace**
 5. **Push all changes to GitHub**
 6. **Tell user what to continue with:** `Continue with Issue #XX`

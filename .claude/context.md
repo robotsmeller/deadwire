@@ -30,7 +30,7 @@ workflow:
 ## To Resume
 
 ```
-Deadwire v0.1.1, Session 18. main at e8d3c34.
+Deadwire v0.1.1, Session 18. main at 4f37fed.
 Phase 1 code complete. ZERO open code bugs. 159 tests, 107 name refs, 108 pack
 checks — all green. And NOTHING has ever been confirmed working in a running game.
 
