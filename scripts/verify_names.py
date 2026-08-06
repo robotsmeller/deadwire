@@ -320,14 +320,50 @@ def _load_translation(name):
     return data.get(name, data)
 
 
-def check_categories(rep):
+ITEM_CAT_PREFIX = "IGUI_ItemCat_"
+RECIPE_CAT_PREFIX = "IGUI_CraftingCategories_"
+
+
+def _vanilla_ig_ui(pz):
+    path = os.path.join(pz, "media", "lua", "shared", "Translate", "EN",
+                        "IG_UI.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        try:
+            return json.load(fh)
+        except ValueError:
+            return {}
+
+
+def check_categories(rep, pz):
     """Item and recipe categories need IGUI_ keys or the UI shows the raw key.
 
     `DisplayCategory = X` on an item resolves through IGUI_ItemCat_X, and
-    `category = X` on a craftRecipe through IGUI_CraftCategory_X -- both in
-    IG_UI.json, which this mod did not have at all until Session 17.
+    `category = X` on a craftRecipe through IGUI_CraftingCategories_X -- both
+    in IG_UI.json, which this mod did not have at all until Session 17.
+
+    The recipe prefix is IGUI_CraftingCategories_, NOT IGUI_CraftCategory_.
+    Session 17 guessed the latter, wrote it into both the mod and this checker,
+    and the checker then reported the bug as resolved for a full session: the
+    crafting sidebar rendered the raw key `CraftingCategories_Deadwire` the
+    whole time. Both prefixes below are taken from the game's own
+    media/lua/shared/Translate/EN/IG_UI.json, not from memory.
     """
     ig = _load_translation("IG_UI")
+
+    # Check the prefixes themselves against the game before using them. A
+    # hardcoded prefix is a belief, and this checker has already shipped a
+    # wrong one; if a future build renames these, the assertion fails loudly
+    # instead of the checker silently blessing keys nothing reads.
+    vanilla_ig = _vanilla_ig_ui(pz)
+    for prefix in (ITEM_CAT_PREFIX, RECIPE_CAT_PREFIX):
+        if any(k.startswith(prefix) for k in vanilla_ig):
+            rep.ok("category prefix", prefix)
+        else:
+            rep.bad("category prefix", prefix + "*",
+                    "media/lua/shared/Translate/EN/IG_UI.json",
+                    "no key with this prefix in the game's own IG_UI.json")
 
     def collect(pattern, fname):
         path = os.path.join(MOD, "scripts", fname)
@@ -339,11 +375,11 @@ def check_categories(rep):
 
     for cat in sorted(collect(r"^\s*DisplayCategory\s*=\s*([A-Za-z0-9_]+)",
                               "deadwire_items.txt")):
-        rep.check("item category", "IGUI_ItemCat_" + cat, ig,
+        rep.check("item category", ITEM_CAT_PREFIX + cat, ig,
                   "Translate/EN/IG_UI.json")
     for cat in sorted(collect(r"^\s*category\s*=\s*([A-Za-z0-9_]+)",
                               "deadwire_recipes.txt")):
-        rep.check("recipe category", "IGUI_CraftCategory_" + cat, ig,
+        rep.check("recipe category", RECIPE_CAT_PREFIX + cat, ig,
                   "Translate/EN/IG_UI.json")
 
     # The sandbox page label lives in Sandbox.json, not IG_UI.json.
@@ -474,7 +510,7 @@ def main():
     check_scripts(rep, jar, items)
     check_sandbox_options(rep)
     check_translation_filenames(rep)
-    check_categories(rep)
+    check_categories(rep, args.pz)
     check_config_sprites(rep)
     check_modinfo(rep, args.pz)
 

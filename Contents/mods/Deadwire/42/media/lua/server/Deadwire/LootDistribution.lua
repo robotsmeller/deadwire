@@ -1,5 +1,6 @@
--- Deadwire LootDistribution: Add bells to loot tables
--- Server: runs via OnPreDistributionMerge (fires once at game start)
+-- Deadwire LootDistribution: Add bells and kits to loot tables
+-- Authoritative side (SP + dedicated server), via OnPreDistributionMerge,
+-- which fires once per load before distributions merge.
 
 require "Deadwire/Config"
 
@@ -34,7 +35,13 @@ local function addToDistributions(distNames, item, chance)
 end
 
 local function preDistributionMerge()
-    if not isServer() then return end
+    -- Authoritative side only. `isServer()` is true ONLY on a dedicated server:
+    -- in single-player isServer() and isClient() are BOTH false, so guarding on
+    -- `not isServer()` returned immediately and no Deadwire loot has ever been
+    -- injected in SP. Guard on isClient() instead -- false in SP and on the
+    -- dedicated server, true only on a real MP client. Same idiom as
+    -- TriggerHandlers.lua:47.
+    if isClient() then return end
     if not DeadwireConfig.getSandbox("EnableMod", true) then return end
 
     local chance = getSpawnChance()

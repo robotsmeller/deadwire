@@ -23,10 +23,19 @@ except ImportError:
 DEADWIRE_PACK = Path("C:/xampp/htdocs/deadwire/Contents/mods/Deadwire/42/media/texturepacks/deadwire_01.pack")
 VANILLA_PACK = Path("C:/Program Files (x86)/Steam/steamapps/common/ProjectZomboid/media/texturepacks/Tiles2x.pack")
 
-# Expected layout: 8 sprites, each 64x128, arranged in a single row (8-column layout)
+# Expected layout: every deadwire_*.png in media/textures/, each 64x128.
+#
+# The sprite count is DERIVED from the source PNGs, not hardcoded. It used to
+# be the literal 8, which turned "the pack contains what we drew" into "the
+# pack contains what it contained in Session 10" -- adding the electric pair
+# failed the check even though the pack was correct. A constant here cannot
+# distinguish a real regression from an intended addition.
+SPRITE_SRC_DIR = Path(
+    "C:/xampp/htdocs/deadwire/Contents/mods/Deadwire/42/media/textures")
+
 EXPECTED_SPRITE_W = 64
 EXPECTED_SPRITE_H = 128
-EXPECTED_SPRITE_COUNT = 8
+EXPECTED_SPRITE_COUNT = len(list(SPRITE_SRC_DIR.glob("deadwire_*.png")))
 EXPECTED_COLUMNS = 8
 
 PNG_MAGIC = bytes([0x89, 0x50, 0x4E, 0x47])  # \x89PNG

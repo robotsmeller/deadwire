@@ -2,7 +2,7 @@ version = 1
 tileset
 {
     file = deadwire_01
-    size = 8,1
+    size = 8,2
     id = 200
 
     // deadwire_01_0 (from deadwire_bell_e.png)
@@ -17,39 +17,51 @@ tileset
         xy = 1,0
     }
 
-    // deadwire_01_2 (from deadwire_reinforced_e.png)
+    // deadwire_01_2 (from deadwire_electric_e.png)
     tile
     {
         xy = 2,0
     }
 
-    // deadwire_01_3 (from deadwire_reinforced_n.png)
+    // deadwire_01_3 (from deadwire_electric_n.png)
     tile
     {
         xy = 3,0
     }
 
-    // deadwire_01_4 (from deadwire_tanglefoot_e.png)
+    // deadwire_01_4 (from deadwire_reinforced_e.png)
     tile
     {
         xy = 4,0
     }
 
-    // deadwire_01_5 (from deadwire_tanglefoot_n.png)
+    // deadwire_01_5 (from deadwire_reinforced_n.png)
     tile
     {
         xy = 5,0
     }
 
-    // deadwire_01_6 (from deadwire_tincan_e.png)
+    // deadwire_01_6 (from deadwire_tanglefoot_e.png)
     tile
     {
         xy = 6,0
     }
 
-    // deadwire_01_7 (from deadwire_tincan_n.png)
+    // deadwire_01_7 (from deadwire_tanglefoot_n.png)
     tile
     {
         xy = 7,0
+    }
+
+    // deadwire_01_8 (from deadwire_tincan_e.png)
+    tile
+    {
+        xy = 0,1
+    }
+
+    // deadwire_01_9 (from deadwire_tincan_n.png)
+    tile
+    {
+        xy = 1,1
     }
 }

@@ -79,12 +79,22 @@ DeadwireConfig.WireDefaults = {
 
 -----------------------------------------------------------
 -- Sprites (per wire type, from deadwire_01 tilesheet)
+--
+-- Indices follow the ALPHABETICAL order of the PNGs in media/textures/, which
+-- is how pz_tilesheet.py globs them. Adding a sprite whose name sorts before
+-- an existing one renumbers everything after it, silently. deadwire_01_2 and
+-- _3 are the electric pair, banked for #13 and deliberately absent from this
+-- table: both consumers (WireManager, BuildActions) do a keyed lookup, so a
+-- packed sprite with no entry here is inert.
+--
+--   0/1 bell_e/bell_n      2/3 electric_e/electric_n   4/5 reinforced_e/_n
+--   6/7 tanglefoot_e/_n    8/9 tincan_e/tincan_n
 -----------------------------------------------------------
 DeadwireConfig.Sprites = {
     bell_tripline       = { north = "deadwire_01_1", east = "deadwire_01_0" },
-    reinforced_tripline = { north = "deadwire_01_3", east = "deadwire_01_2" },
-    tanglefoot          = { north = "deadwire_01_5", east = "deadwire_01_4" },
-    tin_can_tripline    = { north = "deadwire_01_7", east = "deadwire_01_6" },
+    reinforced_tripline = { north = "deadwire_01_5", east = "deadwire_01_4" },
+    tanglefoot          = { north = "deadwire_01_7", east = "deadwire_01_6" },
+    tin_can_tripline    = { north = "deadwire_01_9", east = "deadwire_01_8" },
 }
 
 DeadwireConfig.FALLBACK_SPRITE = "construction_01_24"
