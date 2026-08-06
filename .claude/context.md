@@ -4,9 +4,9 @@
 project: Deadwire
 description: PZ mod — perimeter trip lines and electric fencing for Project Zomboid (B42+)
 last_session: 17
-last_updated: 2026-08-05
-continue_with: "In-game smoke test: sprites load, recipes registered, loot reachable, sounds play, camo now visible/degrading. All five code bugs (#14-#18) are fixed and merged."
-blockers: "World sprite ART is placeholder — the 8 images in deadwire_01 are Session 10 placeholders, not finished art. Loading is no longer the suspected problem: validate_pack.py passes 108/108, the 8 tile names match what Config.Sprites asks for, and tiledef id 200 collides with nothing (vanilla is all below 100; no installed mod declares one). That is still an inference from file structure, not an observation of PZ registering the sheet."
+last_updated: 2026-08-06
+continue_with: "#25 in-game smoke test. Nothing in this mod has ever been verified running; that is now the entire Phase 1 backlog."
+blockers: "#26 world sprite ART — the 8 images are Session 10 placeholders. Loading is NOT the problem (validate_pack.py 108/108, tile names match, tiledef 200 free). Needs 8 sprites drawn at 64x128 + tilesheet rebuild."
 
 tech:
   stack: pz-lua-mod
@@ -27,209 +27,182 @@ workflow:
   current_phase: 1
 ```
 
-## B42 Mod Structure (REQUIRED)
+## To Resume
 
-`mod.info` at root AND in `42/`, both must match. `common/` must exist even if empty. `poster=42/poster.png`. `sandbox-options.txt` in `42/media/`.
+```
+Deadwire v0.1.1, Session 18. main at e8d3c34.
+Phase 1 code complete. ZERO open code bugs. 159 tests, 107 name refs, 108 pack
+checks — all green. And NOTHING has ever been confirmed working in a running game.
 
-Translation files are JSON since 42.15, in `42/media/lua/shared/Translate/EN/`, and the
-filenames carry **no `_EN` suffix** — the `EN/` directory already says the language.
-`ItemName.json`, `Recipes.json`, `Sandbox.json`. `zombie/core/Translator$1` holds a fixed
-hardcoded list of base names and builds `Translate/<LANG>/<NAME>.json`; a file outside
-that list is never opened, with no error. Session 17 found all three of this mod's
-translation files were named `*_EN.json` (B41 `.txt` convention carried over), so every
-item, recipe and sandbox label displayed as a raw id. `verify_names.py` checks this now.
+THIS WINDOW: #25, the in-game smoke test. That is the whole backlog.
 
-## Key Rules
+  cd c:/xampp/htdocs/pz-test-pilot
+  python scripts/cmd.py run_lua 'code=<lua>'
+  (cmd.py splits params on '=', so code MUST be passed as code=<lua>)
 
-1. **Privacy First**: No PII or credentials in commits
-2. **GitHub Issues**: All tasks tracked in Issues
-3. **Multiplayer First**: Server-authoritative
-4. **Test In-Game**: Provide clear test steps
-5. **Module Base**: `module Base` for all items
-6. **Namespace Tags**: `deadwire:tagname`
-7. **Detection is CLIENT-side**: OnZombieUpdate/OnPlayerUpdate are client events
-8. **No guards around unverified API names.** A guard around a typo is indistinguishable from a guard around a real fallback: it turns a loud error into a silently absent feature. This cost three dead features, found in Session 16.
+Start with the one-second check: open the inventory. Item names must read
+"Tin Can Trip Line Kit", NOT "Deadwire_TinCanTripLineKit". All three translation
+files were named *_EN.json and were never loaded by PZ. If they still read as raw
+ids, the Session 17 fix did not land and nothing else is worth testing yet.
+
+Then the other 9 steps in #25, in order — sprites, items, recipes, loot, sounds,
+camo visibility, rain, sandbox options, MP cooldowns.
+
+THEN #26 (sprite art) — but step 2 of #25 tells you whether the sheet even
+registers before you spend time drawing.
+
+Waiting on a decision from Rob: #27 (Bell health option + Reinforced/Bell are
+stat-identical), #28 (delete the stale repo-root mod.info).
+
+Before any commit touching a game name:  python scripts/verify_names.py
+Run tests:                               run_tests.bat
+Validate the tilesheet:                  python tools/validate_pack.py
+```
 
 ## Name verification: run the script, do not check by hand
 
 ```bash
-python scripts/verify_names.py          # exit 0 = every name resolves
+python scripts/verify_names.py          # exit 0 = everything resolves
 ```
 
-`scripts/verify_names.py` resolves every game name the mod references against the
-installed 42.20 install: `Perks.X`, `Capability.X`, `BodyPartType.X`, `Base.X` item
-ids in both Lua and scripts, `ProceduralDistributions` names, recipe
-`SkillRequired`/`xpAward` perks, `Icon =` PNG existence, sprite names against the
-mod's own tilesheet, and root-vs-42 `mod.info` agreement. 67 references at present.
-`scripts/pzclass.py` is the Java `.class` reader underneath it.
+Resolves 107 references against the installed 42.20: `Perks.X`, `Capability.X`,
+`BodyPartType.X`, `Base.X` items, `ProceduralDistributions` names, recipe
+`SkillRequired`/`xpAward` perks, `Icon =` PNGs, sprite names, sandbox options
+(declared vs read vs translated), translation **filenames**, `DisplayCategory` /
+recipe `category` / sandbox `page` label keys, and `tiledef` id range + collisions.
+`scripts/pzclass.py` is the Java `.class` reader underneath.
 
-**This exists because checking by hand does not hold.** Session 16 found six name
-bugs manually and wrote the technique into this file without committing a tool. The
-very next name written by hand — `ChurchMisc` → `ChurchStorageMisc` — was also wrong
-and was committed described as "verified against vanilla ProceduralDistributions.lua
-on 42.20". Session 17 found it in seconds with the script. A checked claim that
-leaves no artifact decays into an unchecked one.
+**It exists because checking by hand does not hold.** Session 16 found six name bugs
+manually and wrote the technique into this file without committing a tool. The very
+next name written by hand — `ChurchMisc` → `ChurchStorageMisc` — was also wrong and
+shipped described as "verified". A checked claim that leaves no artifact decays into
+an unchecked one.
 
-Read declared **fields and methods**, not the raw constant pool. A constant-pool
-grep matches any string anywhere in the class, so it passes `Perks.Foraging`.
-Note also that `Perks` is not a Java enum: it is a holder class of
-`public static final` fields, so an ACC_ENUM-only check finds nothing there.
+Read declared **fields and methods**, not the raw constant pool — a pool grep matches
+any string anywhere in the class, so it passes `Perks.Foraging`. Note `Perks` is not a
+Java enum; it is a holder class of `public static final` fields.
 
-Confirmed to EXIST: `setStaggerBack`, `knockDown`, `setAlphaAndTarget`,
-`getWorldSoundManager`, `PlayWorldSound`, `IsoObject:setOutlineHighlight`,
-`setOutlineHighlightCol`, `isAdmin`, `BodyPartType.Foot_L`, `IsoThumpable`,
-`ISBuildingObject`, `ProceduralDistributions`, `IsoGridSquare:isGeneratorPoweringSquare`,
+EXISTS: `setStaggerBack`, `knockDown`, `setAlphaAndTarget`, `getWorldSoundManager`,
+`PlayWorldSound`, `setOutlineHighlight(Col)`, `isAdmin`, `BodyPartType.Foot_L`,
+`IsoThumpable`, `ISBuildingObject`, `ProceduralDistributions`,
 `getClimateManager():getRainIntensity()`, `Capability.UseBuildCheat`,
-`IsoPlayer:getRole()`, `Role:hasCapability`, `ItemContainer:getFirstTypeRecurse`.
+`IsoPlayer:getRole()`, `Role:hasCapability`, `ItemContainer:getFirstTypeRecurse`,
+`Faction.isInSameFaction(IsoPlayer, String)`.
 
-Confirmed NOT to exist: `Perks.Foraging` (it is `PlantScavenging`), `Perks.Carpentry`
-(it is `Woodwork`), `Capability.CanBuildAnywhere` (it is `UseBuildCheat`), the
-`Climate` global (it is `getClimateManager()`), `getRainStrength` (it is
-`getRainIntensity`), `Base.TreeBranch` (it is `TreeBranch2`), `ChurchMisc` /
-`ChurchStorageMisc` (**42.20 has no church distribution at all**). There is **no
-electrocution system anywhere in the jar**.
+DOES NOT EXIST: `Perks.Foraging` (→`PlantScavenging`), `Perks.Carpentry` (→`Woodwork`),
+`Capability.CanBuildAnywhere` (→`UseBuildCheat`), the `Climate` global
+(→`getClimateManager()`), `getRainStrength` (→`getRainIntensity`), `Base.TreeBranch`
+(→`TreeBranch2`), `ChurchMisc`/`ChurchStorageMisc` (**42.20 has no church distribution
+at all**). There is **no electrocution system anywhere in the jar**.
 
-**Internal name ≠ displayed name.** `Woodwork` displays as "Carpentry" and
-`PlantScavenging` displays as "Foraging" (`IGUI_perks_*` / `Sandbox_*` in the vanilla
-EN translations). Mod code must use the internal name; player-facing tooltips must
-use the displayed one. The Sandbox_EN tooltips saying "Carpentry 2" and "Foraging"
-are therefore correct and were deliberately left alone.
+**Internal name ≠ displayed name.** `Woodwork` displays as "Carpentry",
+`PlantScavenging` as "Foraging". Code uses the internal name; tooltips use the
+displayed one. The Sandbox tooltips saying "Carpentry 2" / "Foraging" are correct.
 
-Rain intensity is normalised 0.0-1.0: vanilla `forageSystem` rounds
-`getPrecipitationIntensity()` to one decimal and multiplies chances by it, and
-`Bobber.lua` tests `getFogIntensity() >= 0.4`. `STORM_THRESHOLD = 0.8` relies on this.
+Rain intensity is 0.0–1.0 (vanilla `forageSystem` rounds `getPrecipitationIntensity()`
+to one decimal and multiplies by it; `Bobber.lua` tests `getFogIntensity() >= 0.4`).
+
+## B42 Mod Structure (REQUIRED)
+
+`mod.info` at root of the mod AND in `42/`, both must match. `common/` must exist even
+if empty. `poster=42/poster.png`. `sandbox-options.txt` in `42/media/`.
+
+**Translations (42.15+) are JSON with NO `_EN` suffix** — the `EN/` directory already
+says the language. `ItemName.json`, `Recipes.json`, `Sandbox.json`, `IG_UI.json`.
+`zombie/core/Translator$1` holds a fixed hardcoded list of base names and opens
+`Translate/<LANG>/<NAME>.json`; a file outside that list is never opened, with no error.
+Session 17 found all three of this mod's translation files named `*_EN.json` (B41 `.txt`
+convention carried over), so every item, recipe and sandbox label displayed as a raw id.
+Categories need `IGUI_ItemCat_X` / `IGUI_CraftCategory_X` in `IG_UI.json`; the sandbox
+page label needs `Sandbox_<page>` in `Sandbox.json`. `verify_names.py` checks all of it.
+
+## Key Rules
+
+1. **Privacy First**: no PII or credentials in commits
+2. **GitHub Issues**: all tasks tracked in Issues
+3. **Multiplayer First**: server-authoritative
+4. **Test In-Game**: provide clear test steps
+5. **Module Base** for all items; namespace tags `deadwire:tagname`
+6. **Detection is CLIENT-side**: OnZombieUpdate/OnPlayerUpdate are client events
+7. **No guards around unverified API names.** A guard around a typo is
+   indistinguishable from a guard around a real fallback: it turns a loud error into a
+   silently absent feature. Cost three dead features (Session 16).
+8. **A missing name logs loudly.** LootDistribution warns rather than skipping in
+   silence — every bug that file had was a nil name with a clean log.
 
 ## Architecture
 
-Shared (WireNetwork, Config) → Client (Detection, UI, TriggerHandlers, CamoVisibility) → Server (ServerCommands, WireManager, BuildActions, LootDistribution, CamoDegradation). Client `sendClientCommand` → server validates → `sendServerCommand` broadcasts.
+Shared (WireNetwork, Config) → Client (Detection, UI, TriggerHandlers, CamoVisibility,
+EventHandlers) → Server (ServerCommands, WireManager, BuildActions, LootDistribution,
+CamoDegradation). Client `sendClientCommand` → server validates → `sendServerCommand`
+broadcasts.
 
-`ISBuildingObject:derive()` files MUST live in `server/`; load order is shared → client → server.
+`ISBuildingObject:derive()` files MUST live in `server/`; load order is shared → client
+→ server. Cooldowns are **real seconds** (`os.time`), broadcast as a *duration* not an
+absolute time because server and clients have independently skewed clocks.
 
 ## Phase Plan
 
 | Phase | Content | Status |
 |-------|---------|--------|
-| 1 (MVP) | Tier 0 + Tier 1 + Camouflage + SandboxVars | Code complete, no open bugs, untested in-game, sprite art placeholder |
+| 1 (MVP) | Tier 0 + Tier 1 + Camouflage + SandboxVars | Code complete, no open bugs, **never run in-game** (#25), sprite art placeholder (#26) |
 | 2 | Pull-alarms | Not started |
-| 3 | Electric fencing | Issue #13, API researched |
+| 3 | Electric fencing | #13, API researched — no electrocution system exists in the jar |
 | 4 | Advanced | Not started |
 
-## Recent Changes
+## Gates
 
-### Session 17 (2026-08-05): every open code bug fixed, plus a name verifier
+| Gate | Command | State |
+|------|---------|-------|
+| Unit tests | `run_tests.bat` | 159 pass |
+| Name resolution | `python scripts/verify_names.py` | 107 refs, all resolve |
+| Tilesheet | `python tools/validate_pack.py` | 108 checks pass |
+| In-game | PZ Test Pilot | **never run** (#25) |
+| CI | — | none configured; all four gates are local-only |
 
-Built `scripts/verify_names.py` + `scripts/pzclass.py` first, then fixed what it
-found. 67 references now resolve; 143/143 tests pass (was 131).
+## Open Issues
 
-Closed #14 through #18:
+| # | Title | State |
+|---|-------|-------|
+| 25 | In-game smoke test — nothing verified running | **Next** |
+| 26 | World sprite art still Session 10 placeholders | Blocker |
+| 27 | Tier 1 balance: Bell health option, Reinforced/Bell identical | Needs Rob |
+| 28 | Delete stale repo-root mod.info | Needs Rob |
+| 13 | Tier 3 electrified wire | Phase 3 |
+| 12 | Loot for metalworking rooms | Code correct + name-verified, needs in-game confirm |
 
-- **#17** `Perks.Foraging` → `Perks.PlantScavenging`. Camouflaged wires were
-  invisible to every player forever, because the nil perk made `getPerkLevel`
-  return 0 for everyone.
-- **#18** the whole Climate call was fiction (`Climate.GetInstance():getRainStrength()`
-  — no such global, no such method). Now `getClimateManager():getRainIntensity()`.
-  Camouflage had never degraded from weather.
-- **#14** `Capability.CanBuildAnywhere` → `UseBuildCheat`, in all **three** places
-  (the issue named one), plus a nil guard on `getRole()`, which threw in SP.
-- **#15** two MP exploits closed: `WireTriggered` now requires the reporter to be
-  within 3 tiles and on the same floor, and `PlaceWire` verifies and consumes the
-  kit server-side instead of trusting the client.
-- **#16** cooldowns moved from game time to real seconds. Also fixed a bug the issue
-  did not mention: the server set the cooldown while detection checks it on the
-  *client*, so in MP the cooldown never applied at all. `WireTriggered` now
-  broadcasts the duration (not an absolute time — clock skew) and clients mirror it.
-  The broadcast is no longer gated on `soundName`, so silent Tanglefoot gets one too;
-  the client no longer substitutes a default sound when `soundName` is absent, which
-  would have made Tanglefoot audible.
+## Recent sessions
 
-Then five more bugs the verifier found that were on no issue at all:
+### Session 17 (2026-08-05/06): eleven silent failures, six PRs
 
-- `ChurchStorageMisc` does not exist — 42.20 has **no church distribution at all**, so
-  bells silently never spawned there. Now `JanitorMisc`.
-- Both Tier 1 recipes required `SkillRequired = Carpentry`, which is not a perk. It is
-  `Woodwork`. The recipes were likely uncraftable.
-- **All three translation files were named `*_EN.json` and were never loaded.**
-  `zombie/core/Translator$1` holds a fixed list of base names and opens
-  `Translate/<LANG>/<NAME>.json`; `ItemName_EN` is not on it. Every item name, recipe
-  name and sandbox label displayed as a raw id, and had since the mod was written. The
-  `_EN` suffix is the B41 `.txt` convention, and it was recorded as correct in the
-  project memory file, which is why three sessions of auditing missed it.
-- No `IG_UI.json` existed, so `DisplayCategory = Deadwire` and recipe
-  `category = Deadwire` showed raw keys.
-- Four sandbox options (`TripLineHealth`, `ReinforcedHealth`, `TinCanBreakOnTrigger`,
-  `FriendlyFireWires`) were declared, translated, shown to players — and read by no
-  code at all. All four now work; `FriendlyFireWires` uses
-  `Faction.isInSameFaction(IsoPlayer, String)`.
+Built `scripts/verify_names.py` + `pzclass.py` **before** fixing anything, because
+Session 16's hand-verification had already decayed. Closed #14–#18 and found six more
+bugs on no issue at all. PRs #19–#24, all merged.
 
-Also: `versionMin` 42.0.0 → 42.15.0 (JSON translations need 42.15). `validate_pack.py`
-passes 108/108 on the tilesheet and tiledef id 200 collides with nothing, so the sprite
-blocker is art quality rather than suspected load failure.
+From issues: `Perks.Foraging` nil so camo was invisible to everyone forever (#17); the
+entire Climate call was fiction so camo never degraded (#18); `Capability.CanBuildAnywhere`
+in **three** places, not the one the issue named, plus an unguarded `getRole()` (#14); two
+MP exploits — unvalidated `WireTriggered` and client-trusted kits (#15); cooldowns in game
+time **and** set server-side while checked client-side, so MP cooldowns never applied at
+all (#16).
 
-Tests 131 → 159. Merged as PRs #19-#23.
-
-**Unverified in-game: everything.** Nothing this session was run against a running
-game. The translation fix is the easiest thing to check — if item names still read
-`Deadwire_TinCanTripLineKit` in the inventory, something else is wrong.
+Found by the verifier: `ChurchStorageMisc` does not exist; both Tier 1 recipes required
+the nonexistent perk `Carpentry`; **all three translation files were named `*_EN.json` and
+were never loaded**, so every item/recipe/sandbox label showed as a raw id since the mod
+was written; no `IG_UI.json` existed so categories showed raw keys; four sandbox options
+were declared, translated, shown to players and read by no code. Also `versionMin`
+42.0.0 → 42.15.0. Tests 131 → 159. Corrected the auto-memory note that recorded the
+`_EN` suffix as correct — that is why three sessions of auditing missed it.
 
 ### Session 16 (2026-08-05): B42.20.2 audit — six silent failures, three fixed
 
-Audited the whole mod against an installed 42.20 rather than against docs. `pz-mod-checker scan` reported clean both before and after and found none of it: it is a version-keyed rule engine with no concept of "does this name resolve".
-
-Fixed and committed (4537d2c): four loot table names that do not exist (`FarmTools`, `ChurchMisc`, `MetalFabrication`, `MetalFabricationStorage`), a kit item id typo'd against the mod's own item, and `Base.TreeBranch` which made Tanglefoot uncraftable. Also added `Base.ElectricWire` to both trip-line bindings at count 2, widened the Tanglefoot wood input to five items, `tags=` → `Tags=`, `Type=` → `ItemType=base:normal`. All 17 `Base.*` references now resolve.
-
-Filed #14 through #18. #17 and #18 are the serious ones: `Perks.Foraging` and the entire Climate call are wrong, so camouflaged wires are invisible to everyone forever AND never degrade. The camouflage system has never worked in either direction.
-
-Smoke test via pz-test-pilot confirmed the mod loads, all five globals initialise, and all four items exist (validating the `ItemType` change). Sprites, recipes and loot tables remain unverified; the run was interrupted by an urgent bug in the sibling HeadForTheHills mod.
-
-Filed pz-mod-checker#23: spec for a `validate` command resolving every name a mod uses against the installed game. Six of seven bugs found today were one shape and it would have caught all of them.
+Audited the mod against an installed 42.20 rather than docs. Fixed four bad loot table
+names, a kit item id typo, and `Base.TreeBranch` (made Tanglefoot uncraftable). Filed
+#14–#18. `pz-mod-checker scan` reported clean before and after and caught none of it —
+it is a version-keyed rule engine with no concept of whether a name resolves. Filed
+pz-mod-checker#23 spec'ing a `validate` command.
 
 ### Session 15 (2026-04-14): Gemini inventory icons + pz_unpack.py
 
-Built `pz_unpack.py` at `c:/xampp/htdocs/pz-tilesheet/`. Generated all 4 inventory icons (32x32) via Gemini. World sprites still in progress; full-size source PNGs sit at repo root pending crop/resize and a tilesheet rebuild.
-
-### Session 14 (2026-03-11): Float safety, loot guard, north orientation
-
-`tileKey` floors all coords. `LootDistribution` gained an `isServer()` guard. `north` forwarded through Client/ServerCommands. 131/131 tests pass.
-
-## To Resume
-
-```
-Deadwire v0.1.1, Session 18. Phase 1 code complete, ZERO open code bugs,
-but nothing has ever been confirmed working in a running game.
-
-Everything left needs PZ actually running. That is the whole remaining list.
-
-THIS WINDOW:
-
-1. Smoke test. Harness: PZ running with PZ Test Pilot enabled, then
-     cd c:/xampp/htdocs/pz-test-pilot
-     python scripts/cmd.py run_lua 'code=<lua>'
-   cmd.py splits params on '=', so the code MUST be passed as code=<lua>.
-   Check, in order:
-     a. Open the inventory. Item names must read "Tin Can Trip Line Kit", NOT
-        "Deadwire_TinCanTripLineKit". Cheapest possible check that the S17
-        translation fix landed; if it failed, something else is wrong.
-     b. getSprite("deadwire_01_0") .. _7 all non-nil  -> tilesheet actually loaded
-     c. getScriptManager():getItem("Base.Deadwire_TinCanTripLineKit") non-nil
-     d. all four craftRecipes registered (Woodwork:2 now, was the bogus Carpentry:2)
-     e. ProceduralDistributions.list.JanitorMisc contains Base.Bell after world load
-     f. place a wire, walk a zombie into it, hear the sound
-     g. camouflage a wire, check a low-skill character cannot see it and a
-        PlantScavenging 7 character can -- this path has NEVER worked before now
-     h. confirm getRainIntensity() really is 0-1 in a live storm (STORM_THRESHOLD=0.8)
-     i. the four revived sandbox options actually bite: set TripLineHealth to 500
-        and confirm a tin can wire takes far more thumps
-
-2. Then the blocker: world sprite ART. The 8 images in deadwire_01 are Session 10
-   placeholders. Source PNGs at repo root need crop/resize to 64x128 and a
-   tilesheet rebuild. Step 1a tells you whether the sheet loads at all before you
-   spend time on art.
-
-3. Parked for Rob: delete the stale repo-root mod.info (0.1.0, poster=poster.png).
-   It sits outside Contents/ so PZ never reads it, but it reads like the manifest
-   and is not one. Session 17 misread it as such.
-
-Before any commit that touches names:  python scripts/verify_names.py   (107 refs)
-Run tests anytime:                     run_tests.bat                    (159 tests)
-Validate the tilesheet:                python tools/validate_pack.py    (108 checks)
-```
+Built `pz_unpack.py` at `c:/xampp/htdocs/pz-tilesheet/`. Generated all 4 inventory icons
+(32x32). World sprites left as placeholders.
