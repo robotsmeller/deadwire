@@ -25,6 +25,10 @@ function ISDeadwireWireAction:isValid()
     local wire = DeadwireNetwork.getTile(self.wx, self.wy, self.wz)
     if not wire then return false end
     if self.command == "CamouflageWire" and wire.camouflaged then return false end
+    -- The reverse of the line above (#56). Without it the action would be
+    -- valid on a wire that is already plain, and the player would stand there
+    -- playing the animation for nothing.
+    if self.command == "UncamouflageWire" and not wire.camouflaged then return false end
     return true
 end
 

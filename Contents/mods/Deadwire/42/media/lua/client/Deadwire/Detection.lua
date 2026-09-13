@@ -35,6 +35,73 @@ end
 -- Shared Detection Logic (DRY: one path for both entity types)
 -----------------------------------------------------------
 
+-----------------------------------------------------------
+-- Which edge did this step cross? (#55)
+--
+-- A wire lies on ONE edge of its tile: north=true is the tile's north edge,
+-- north=false its west edge. Until now detection fired on tile occupancy
+-- alone, so walking the length of your own perimeter set off every wire in
+-- it, exactly as if you had crossed them. Reinforced then knocked you flat
+-- for walking beside your own fence.
+--
+-- An edge is shared between two tiles, and the convention that makes the
+-- arithmetic honest is that the edge belongs to the tile on its far side:
+-- the boundary between (x, y-1) and (x, y) is the NORTH edge of (x, y), and
+-- the boundary between (x-1, y) and (x, y) is the WEST edge of (x, y). So a
+-- step resolves to the edge it broke, and the wire that owns that edge is
+-- the only one that fires -- whether the walker ended up on the wire's tile
+-- or on the one next door.
+--
+-- Diagonal steps clip a corner and are credited to both components. That is
+-- deliberately the generous reading: a wire you can sidestep by approaching
+-- it diagonally would be a worse bug than the one being fixed.
+local function crossedEdges(fromX, fromY, toX, toY)
+    local edges = {}
+    local dx, dy = toX - fromX, toY - fromY
+
+    -- Anything bigger than one tile is a teleport, a vehicle exit or a
+    -- dropped frame, not a step over a wire. Crediting it to an edge would
+    -- be inventing a crossing that never happened.
+    if math.abs(dx) > 1 or math.abs(dy) > 1 then return edges end
+
+    if dy ~= 0 then
+        local edgeY = (dy > 0) and toY or fromY
+        table.insert(edges, { x = fromX, y = edgeY, north = true })
+        if dx ~= 0 then
+            table.insert(edges, { x = toX, y = edgeY, north = true })
+        end
+    end
+
+    if dx ~= 0 then
+        local edgeX = (dx > 0) and toX or fromX
+        table.insert(edges, { x = edgeX, y = fromY, north = false })
+        if dy ~= 0 then
+            table.insert(edges, { x = edgeX, y = toY, north = false })
+        end
+    end
+
+    return edges
+end
+
+-- The wire whose own edge this step broke, or nil. A wire with no recorded
+-- facing (saved before #55, and not yet recovered off its IsoObject) matches
+-- any edge on its tile: the old occupancy behaviour, kept on purpose so that
+-- an old save degrades to the previous bug rather than to a dead perimeter.
+local function findCrossedWire(fromX, fromY, toX, toY, z)
+    for _, edge in ipairs(crossedEdges(fromX, fromY, toX, toY)) do
+        local wire = DeadwireNetwork.getTile(edge.x, edge.y, z)
+        if wire and wire.active
+            and (wire.north == nil or wire.north == edge.north)
+        then
+            return wire, edge
+        end
+    end
+    return nil
+end
+
+DeadwireDetection.crossedEdges = crossedEdges
+DeadwireDetection.findCrossedWire = findCrossedWire
+
 local function detectEntity(entity, isZombie)
     if not DeadwireConfig.getSandbox("EnableMod", true) then return end
 
@@ -43,12 +110,33 @@ local function detectEntity(entity, isZombie)
 
     if isZombie and not entity:isAlive() then return end
 
-    local sq = entity:getSquare()
-    if not sq then return end
+    local entitySq = entity:getSquare()
+    if not entitySq then return end
 
-    local x, y, z = sq:getX(), sq:getY(), sq:getZ()
-    local wire = DeadwireNetwork.getTile(x, y, z)
-    if not wire or not wire.active then return end
+    local ex, ey, z = entitySq:getX(), entitySq:getY(), entitySq:getZ()
+
+    -- Where the entity was on the previous tile it occupied. Tracked on every
+    -- update regardless of whether a wire is anywhere near, because the step
+    -- that matters is the one INTO the wire, and by the time we know a wire is
+    -- involved the previous tile is the only thing that can tell us which way
+    -- the walker was going.
+    local data = entity:getModData()
+    local lastX, lastY, lastZ = data["dw_lastX"], data["dw_lastY"], data["dw_lastZ"]
+    local moved = (lastX ~= ex or lastY ~= ey or lastZ ~= z)
+    if not moved then return end
+
+    data["dw_lastX"], data["dw_lastY"], data["dw_lastZ"] = ex, ey, z
+
+    -- First sighting of this entity, or it changed floor. Neither is a step
+    -- across a wire on this level.
+    if lastX == nil or lastY == nil or lastZ ~= z then return end
+
+    local wire, edge = findCrossedWire(lastX, lastY, ex, ey, z)
+    if not wire then return end
+
+    local x, y = wire.x, wire.y
+    local sq = getCell():getGridSquare(x, y, z)
+    if not sq then return end
 
     if DeadwireNetwork.isOnCooldown(x, y, z) then return end
 
@@ -87,7 +175,6 @@ local function detectEntity(entity, isZombie)
     -- (#41). Entities from an older save still carry those orphans; they are
     -- inert and not worth a migration pass.
     local key = DeadwireNetwork.tileKey(x, y, z)
-    local data = entity:getModData()
     local now = os.time()  -- real-time seconds (not game-hours)
     local DEDUP_SECONDS = 1  -- 1 real second
     if data["dw_lastTile"] == key

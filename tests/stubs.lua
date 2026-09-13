@@ -139,6 +139,19 @@ function _makeSquare(x, y, z)
         _addMover = function(self, obj)
             table.insert(movers, obj)
         end,
+
+        -- Power. Starts DEAD and outdoors, and only ever becomes live because
+        -- a test said so. Key rule 9: a stub that supplies power on request
+        -- cannot detect an unpowered run, and "is this circuit live" is the
+        -- single question all of Tier 3 turns on.
+        _electricity = false,
+        _gridPower   = false,
+        _outside     = true,
+        _generator   = nil,
+        haveElectricity = function(self) return self._electricity end,
+        hasGridPower    = function(self) return self._gridPower end,
+        isOutside       = function(self) return self._outside end,
+        getGenerator    = function(self) return self._generator end,
     }
     _squares[key] = sq
     return sq
@@ -380,14 +393,32 @@ function _getSoundCalls() return _soundCalls end
 -----------------------------------------------------------------
 -- Entity builders for detection tests
 -----------------------------------------------------------------
+-- Detection fires on a tile CROSSING, not on tile occupancy (#55), so a mock
+-- that has never been anywhere cannot trigger anything: with no previous tile
+-- there is no step, and with no step there is no edge to have broken. Every
+-- mock therefore arrives from the tile directly north of it, which is the
+-- ordinary case a test means when it says "a zombie on the wire tile".
+-- _stepTo below is for tests that care which way it came from.
+local function _seedArrival(modData, x, y, z)
+    modData["dw_lastX"] = x
+    modData["dw_lastY"] = y - 1
+    modData["dw_lastZ"] = z
+end
+
 function _mockZombie(x, y, z, alive)
     local modData = {}
+    _seedArrival(modData, x, y, z)
     local sq = _squares[x .. "," .. y .. "," .. z]
     local z_ = {
         _class      = "IsoZombie",
         _sq         = sq,
         _x = x, _y = y, _z = z,
-        isAlive     = function() return alive ~= false end,
+        -- Reads a field rather than the constructor argument, so that Kill()
+        -- actually makes the zombie dead. Closing over `alive` meant a killed
+        -- zombie still answered isAlive() = true, and the fence pulse would
+        -- have gone on shocking a corpse every second forever.
+        _alive      = (alive ~= false),
+        isAlive     = function(self) return self._alive end,
         getSquare   = function(self) return self._sq end,
         getModData  = function() return modData end,
         getUsername = function() return nil end,
@@ -401,6 +432,16 @@ function _mockZombie(x, y, z, alive)
         _knockedDown = false,
         isCrawling   = function(self) return self._crawling end,
         knockDown    = function(self, _fall) self._knockedDown = true end,
+
+        -- The shock's other two outcomes (#13). Kill takes the killer, which
+        -- is nil for a wire: nothing in the jar attributes a death to an
+        -- object, and there is no electrocution death cause to attribute it
+        -- to. setStaggerBack is the throw-off-the-wire half.
+        _killed       = false,
+        _staggeredBack = false,
+        Kill           = function(self, _killer) self._killed = true
+                                                 self._alive = false end,
+        setStaggerBack = function(self, v) self._staggeredBack = v and true or false end,
     }
     return _placeOn(z_, x, y, z)
 end
@@ -465,6 +506,7 @@ end
 
 function _mockPlayer(x, y, z, username)
     local modData = {}
+    _seedArrival(modData, x, y, z)
     local sq = _squares[x .. "," .. y .. "," .. z]
     local inv = _makeInventory()
     local p = {
@@ -502,8 +544,14 @@ function _mockPlayer(x, y, z, username)
         setBumpType = function(self, t) self._bumpType = t end,
         setVariable = function(self, k, v) self._variables[k] = v end,
         _damage = {},
+        -- Panic starts at zero and only ever moves because something raised
+        -- it. IncreasePanic takes an int in the real jar ((I)V), and the level
+        -- decays on its own, which is why the shock sets an amount rather than
+        -- a duration.
+        _panic = 0,
         getBodyDamage = function(self)
             local dmg = self._damage
+            local me = self
             return {
                 getBodyPart = function(_, partType)
                     return {
@@ -511,6 +559,9 @@ function _mockPlayer(x, y, z, username)
                             dmg[partType] = (dmg[partType] or 0) + amount
                         end,
                     }
+                end,
+                IncreasePanic = function(_, amount)
+                    me._panic = me._panic + amount
                 end,
             }
         end,
@@ -690,7 +741,12 @@ Perks = setmetatable({}, {
 -- UseBuildCheat: a table that answers whatever it is asked cannot detect a
 -- typo.
 -----------------------------------------------------------------
-BodyPartType = { Foot_L = "Foot_L" }
+BodyPartType = {
+    Foot_L     = "Foot_L",
+    Foot_R     = "Foot_R",
+    LowerLeg_L = "LowerLeg_L",
+    LowerLeg_R = "LowerLeg_R",
+}
 
 -----------------------------------------------------------------
 -- Climate

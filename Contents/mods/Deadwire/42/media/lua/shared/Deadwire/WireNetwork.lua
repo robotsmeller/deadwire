@@ -55,7 +55,15 @@ end
 -- Tile Registration
 -----------------------------------------------------------
 
-function DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId)
+-- `north` is which edge of the tile the wire lies on: true = the north edge,
+-- false = the west edge. It is the same flag the sprite and the IsoThumpable
+-- are built from, and until #55 it was thrown away the moment the object was
+-- created. Detection needs it to tell crossing a wire from walking beside one.
+--
+-- It is deliberately allowed to be nil. Wires saved before #55 have no
+-- recorded facing, and a nil here means "unknown", which detection treats as
+-- the old occupancy behaviour rather than silently refusing to fire.
+function DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId, north)
     x = math.floor(x)
     y = math.floor(y)
     z = math.floor(z)
@@ -70,6 +78,7 @@ function DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId)
         existing.wireType = wireType
         existing.ownerId = ownerId
         existing.active = true
+        if north ~= nil then existing.north = north end
         return existing
     end
 
@@ -81,6 +90,7 @@ function DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId)
         y = y,
         z = z,
         ownerId = ownerId,
+        north = north,
         camouflaged = false,
         camoDurability = 0,
         cooldownUntil = 0,
@@ -96,6 +106,8 @@ function DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId)
         }
     end
     table.insert(networks[networkId].tiles, key)
+
+    DeadwireNetwork.recomputeCircuits()
 
     DeadwireConfig.debugLog("Registered tile " .. key .. " network=" .. networkId .. " type=" .. wireType)
     return entry
@@ -124,7 +136,76 @@ function DeadwireNetwork.unregisterTile(x, y, z)
     end
 
     tileIndex[key] = nil
+    DeadwireNetwork.recomputeCircuits()
     DeadwireConfig.debugLog("Unregistered tile " .. key)
+end
+
+-----------------------------------------------------------
+-- Circuit adjacency (#53)
+--
+-- An energiser powers a *run* of wire, not a radius, and `networks` could
+-- never express that: every placement minted a fresh networkId, so the table
+-- was a 1:1 mirror of tileIndex with no adjacency in it at all.
+--
+-- A circuit is a connected component over orthogonally adjacent wire tiles on
+-- one z level. Recomputed whole on every place and remove, never on a tick.
+-- Placement is rare and the tile set is small, and a full re-flood gets the
+-- hard case -- pulling a wire out of the middle of a run has to SPLIT it into
+-- two circuits -- for free, which is the case that makes union-find awkward.
+-- The pulse and the zombie tick only ever read entry.circuitId.
+-----------------------------------------------------------
+
+local NEIGHBOUR_OFFSETS = {
+    { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 },
+}
+
+function DeadwireNetwork.recomputeCircuits()
+    local seen = {}
+    local nextCircuit = 1
+
+    for key, entry in pairs(tileIndex) do
+        if not seen[key] then
+            -- Breadth-first walk out from this tile, stamping one id on
+            -- everything reachable through orthogonal adjacency.
+            local circuitId = nextCircuit
+            nextCircuit = nextCircuit + 1
+
+            local queue = { key }
+            seen[key] = true
+            local head = 1
+            while head <= #queue do
+                local currentKey = queue[head]
+                head = head + 1
+                local current = tileIndex[currentKey]
+                if current then
+                    current.circuitId = circuitId
+                    for _, off in ipairs(NEIGHBOUR_OFFSETS) do
+                        local nKey = DeadwireNetwork.tileKey(
+                            current.x + off[1], current.y + off[2], current.z)
+                        if tileIndex[nKey] and not seen[nKey] then
+                            seen[nKey] = true
+                            table.insert(queue, nKey)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Every tile sharing a circuit with this one, the tile itself included.
+-- Returns an empty table for a tile that holds no wire.
+function DeadwireNetwork.getCircuitTiles(x, y, z)
+    local entry = tileIndex[DeadwireNetwork.tileKey(x, y, z)]
+    if not entry or not entry.circuitId then return {} end
+
+    local out = {}
+    for _, other in pairs(tileIndex) do
+        if other.circuitId == entry.circuitId then
+            table.insert(out, other)
+        end
+    end
+    return out
 end
 
 -----------------------------------------------------------

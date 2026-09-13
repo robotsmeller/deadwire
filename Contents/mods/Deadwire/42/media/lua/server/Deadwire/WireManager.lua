@@ -66,6 +66,10 @@ function DeadwireWireManager.createWire(sq, wireType, ownerId, networkId, north)
     data["dw_networkId"] = networkId
     data["dw_owner"] = ownerId
     data["dw_active"] = true
+    -- The facing the sprite and the IsoThumpable were both built from. Kept
+    -- so detection can tell crossing the wire from walking alongside it
+    -- (#55), and so a reload can restore it without guessing.
+    data["dw_north"] = north and true or false
 
     sq:AddSpecialObject(obj)
     obj:transmitCompleteItemToClients()
@@ -77,11 +81,11 @@ function DeadwireWireManager.createWire(sq, wireType, ownerId, networkId, north)
     -- Fixes #8: wire placed near door blocks passage.
 
     -- Register in WireNetwork for detection
-    local entry = DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId)
+    local entry = DeadwireNetwork.registerTile(x, y, z, networkId, wireType, ownerId, north and true or false)
     entry.isoObject = obj
 
     -- Persist to GlobalModData
-    DeadwireWireManager.saveWire(x, y, z, networkId, wireType, ownerId)
+    DeadwireWireManager.saveWire(x, y, z, networkId, wireType, ownerId, north and true or false)
 
     DeadwireConfig.debugLog("WireManager: created " .. wireType .. " at " .. x .. "," .. y .. "," .. z)
     return obj
@@ -182,7 +186,7 @@ end
 -- Persistence: Save
 -----------------------------------------------------------
 
-function DeadwireWireManager.saveWire(x, y, z, networkId, wireType, ownerId)
+function DeadwireWireManager.saveWire(x, y, z, networkId, wireType, ownerId, north)
     local saved = ModData.getOrCreate(SAVE_KEY)
     local key = DeadwireNetwork.tileKey(x, y, z)
     saved[key] = {
@@ -192,6 +196,7 @@ function DeadwireWireManager.saveWire(x, y, z, networkId, wireType, ownerId)
         networkId = networkId,
         wireType = wireType,
         ownerId = ownerId,
+        north = north and true or false,
         camouflaged = false,
         camoDurability = 0,
     }
@@ -207,6 +212,15 @@ function DeadwireWireManager.saveCamo(x, y, z, camouflaged, durability)
     if not entry then return end
     entry.camouflaged = camouflaged and true or false
     entry.camoDurability = durability or 0
+end
+
+-- Same two-places problem as saveCamo: the live entry and the saved entry are
+-- separate, and only writing the first loses it on reload.
+function DeadwireWireManager.saveNorth(x, y, z, north)
+    local saved = ModData.getOrCreate(SAVE_KEY)
+    local entry = saved[DeadwireNetwork.tileKey(x, y, z)]
+    if not entry then return end
+    entry.north = north and true or false
 end
 
 function DeadwireWireManager.removeSavedWire(x, y, z)
@@ -230,9 +244,15 @@ function DeadwireWireManager.loadAll()
 
     for key, wire in pairs(saved) do
         if wire.x and wire.y and wire.z and wire.networkId and wire.wireType then
+            -- wire.north is nil for anything saved before #55. Passing the
+            -- nil through on purpose: registerTile treats it as "facing
+            -- unknown" and detection falls back to the old occupancy rule for
+            -- that tile, rather than a wire from an old save going inert.
+            -- reconnectSquare recovers the real facing off the object when
+            -- the chunk loads.
             DeadwireNetwork.registerTile(
                 wire.x, wire.y, wire.z,
-                wire.networkId, wire.wireType, wire.ownerId
+                wire.networkId, wire.wireType, wire.ownerId, wire.north
             )
             -- registerTile always starts a tile uncamouflaged, so camo has to
             -- be reapplied here or it is lost on every load (#34).
@@ -271,6 +291,27 @@ function DeadwireWireManager.reconnectSquare(sq)
             if data and data["dw_type"] then
                 local x, y, z = sq:getX(), sq:getY(), sq:getZ()
                 DeadwireNetwork.setIsoObject(x, y, z, obj)
+
+                -- Recover the facing for wires saved before #55, which have
+                -- none recorded. The object itself has always known: getNorth()
+                -- is the same flag it was constructed with. Prefer our own
+                -- stored value when there is one, fall back to the object, and
+                -- write the answer back to the save so the recovery happens
+                -- once rather than every chunk load.
+                local entry = DeadwireNetwork.getTile(x, y, z)
+                if entry and entry.north == nil then
+                    local north = data["dw_north"]
+                    if north == nil and obj.getNorth then
+                        north = obj:getNorth()
+                    end
+                    if north ~= nil then
+                        entry.north = north and true or false
+                        data["dw_north"] = entry.north
+                        DeadwireWireManager.saveNorth(x, y, z, entry.north)
+                        DeadwireConfig.debugLog("Recovered facing for pre-#55 wire at "
+                            .. x .. "," .. y .. "," .. z .. " north=" .. tostring(entry.north))
+                    end
+                end
             end
         end
     end
@@ -324,6 +365,7 @@ function DeadwireWireManager.buildSyncPayload()
                 networkId      = wire.networkId,
                 wireType       = wire.wireType,
                 ownerId        = wire.ownerId,
+                north          = wire.north,
                 camouflaged    = wire.camouflaged and true or false,
                 camoDurability = wire.camoDurability or 0,
             })

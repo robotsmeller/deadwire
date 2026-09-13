@@ -74,13 +74,40 @@ handlers["WirePlaced"] = function(args)
         args.x, args.y, args.z,
         args.networkId,
         args.wireType,
-        args.ownerId
+        args.ownerId,
+        args.north
     )
 
     -- Cache the IsoObject reference for client-side camo visibility
     DeadwireNetwork.relinkIsoObject(args.x, args.y, args.z)
 
     DeadwireConfig.debugLog("Wire placed at " .. args.x .. "," .. args.y .. "," .. args.z)
+end
+
+-----------------------------------------------------------
+-- FencePulse / FenceElectrified (#52)
+--
+-- Dead in single player, like every other handler in this file:
+-- sendServerCommand is a no-op off a dedicated server, and in single player
+-- the pulse already played its own sound locally. These exist so a
+-- multiplayer client hears a fence bite something it did not compute.
+-----------------------------------------------------------
+
+handlers["FencePulse"] = function(args)
+    if not hasPosition(args) then return end
+    if not args.soundName then return end
+
+    local sq = getSquareFromArgs(args)
+    if not sq then return end
+
+    getSoundManager():PlayWorldSound(args.soundName, sq, 0, 20, 1.0, false)
+    DeadwireConfig.debugLog("Fence pulsed at " .. args.x .. "," .. args.y)
+end
+
+handlers["FenceElectrified"] = function(args)
+    if not hasPosition(args) then return end
+    DeadwireConfig.debugLog("Fence at " .. args.x .. "," .. args.y
+        .. (args.electrified and " is live" or " is dead"))
 end
 
 -----------------------------------------------------------
@@ -137,7 +164,8 @@ handlers["WireNetworkSync"] = function(args)
                 wire.x, wire.y, wire.z,
                 wire.networkId,
                 wire.wireType,
-                wire.ownerId
+                wire.ownerId,
+                wire.north
             )
             if wire.camouflaged then
                 DeadwireNetwork.setCamouflaged(

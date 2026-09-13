@@ -170,12 +170,19 @@ test("same zombie triggers wire again after 2 seconds have passed", function()
         count = count + 1
     end
 
+    _makeSquare(7, 6, 0)
     local zombie = _mockZombie(7, 7, 0)
     Events.OnZombieUpdate:Fire(zombie)
     assert_eq(count, 1, "first trigger should fire")
 
-    -- Advance os.time by 2 real seconds — past the 1-second dedup window
+    -- Advance os.time by 2 real seconds — past the 1-second dedup window.
+    -- The zombie also has to step off the wire and back onto it, because a
+    -- trigger is a crossing now (#55) and standing still on a wire is not one.
+    -- Firing the event again without moving is the test for that, below.
     _setOsTime(1000002)
+    _moveTo(zombie, 7, 6, 0)
+    Events.OnZombieUpdate:Fire(zombie)
+    _moveTo(zombie, 7, 7, 0)
     Events.OnZombieUpdate:Fire(zombie)
     assert_eq(count, 2, "second trigger should fire after dedup window expires")
 
@@ -192,17 +199,35 @@ test("dedup writes two fixed keys, not one per tile crossed (#41)", function()
     end
     DeadwireDetection.zombieHandlers["tin_can_tripline"] = function() end
 
-    local zombie = _mockZombie(21, 30, 0)
-    for i = 1, 4 do
-        _moveTo(zombie, 20 + i, 30, 0)
-        Events.OnZombieUpdate:Fire(zombie)
+    local function keyCount(entity)
+        local n = 0
+        for _ in pairs(entity:getModData()) do n = n + 1 end
+        return n
     end
+
+    local shortWalk = _mockZombie(21, 30, 0)
+    for i = 1, 4 do
+        _moveTo(shortWalk, 20 + i, 30, 0)
+        Events.OnZombieUpdate:Fire(shortWalk)
+    end
+    local afterFour = keyCount(shortWalk)
 
     -- modData persists with the entity for the life of the save, so a key per
     -- crossed tile grew without bound on any zombie patrolling a perimeter.
-    local keys = 0
-    for k, _ in pairs(zombie:getModData()) do keys = keys + 1 end
-    assert_eq(keys, 2, "four tiles crossed must still leave exactly two keys")
+    --
+    -- Asserting a derived comparison rather than a remembered number, per key
+    -- rule 9: a hardcoded count blesses whatever the code currently writes,
+    -- and the claim is that the count does not GROW with distance walked. It
+    -- was 2 before #55 and is 5 now that the previous tile is tracked too, and
+    -- a literal would have had to be edited to agree with the bug either way.
+    for i = 5, 12 do
+        _makeSquare(20 + i, 30, 0)
+        DeadwireNetwork.registerTile(20 + i, 30, 0, 1, "tin_can_tripline", "alice")
+        _moveTo(shortWalk, 20 + i, 30, 0)
+        Events.OnZombieUpdate:Fire(shortWalk)
+    end
+    assert_eq(keyCount(shortWalk), afterFour,
+        "twelve tiles crossed must leave the same number of keys as four")
 
     DeadwireDetection.zombieHandlers["tin_can_tripline"] = nil
 end)
@@ -485,6 +510,160 @@ test("false: zombies are unaffected by the faction check", function()
     DeadwireDetection.zombieHandlers["tin_can_tripline"] = nil
 
     assert_true(called, "faction immunity is player-only")
+end)
+
+suite("Detection: crossing a wire vs walking beside it (#55)")
+
+-- The bug this suite exists for: detection fired on tile occupancy, so a wire
+-- went off when you walked ALONG it, not just across it. Reinforced knocked
+-- Rob on his back for walking the length of his own fence.
+--
+-- Geometry, and the reason each case is the tile it is: a wire with north=true
+-- sits on its tile's NORTH edge, which is the boundary between (x, y-1) and
+-- (x, y). north=false sits on the WEST edge, between (x-1, y) and (x, y).
+
+-- The walker has to be SEEN standing on the from-tile before it steps, or the
+-- step under test is measured from wherever the mock was seeded and comes out
+-- as a two-tile jump. Fire once to settle it in place, zero the counter, then
+-- take the one step the test is actually about.
+local function fireWalk(wireX, wireY, north, fromX, fromY, toX, toY)
+    _reset()
+    _makeSquare(wireX, wireY, 0)
+    _makeSquare(fromX, fromY, 0)
+    _makeSquare(toX, toY, 0)
+    DeadwireNetwork.registerTile(wireX, wireY, 0, 1, "tin_can_tripline", "alice", north)
+
+    local fired = 0
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = function() fired = fired + 1 end
+
+    local zombie = _mockZombie(fromX, fromY, 0)
+    Events.OnZombieUpdate:Fire(zombie)   -- arrive, whatever that costs
+    fired = 0                            -- only the next step is under test
+
+    -- Past the one-second dedup window, so that a wire legitimately crossed
+    -- twice in this walk is not swallowed as a duplicate.
+    _setOsTime(os.time() + 5)   -- _osTime itself is local to stubs.lua
+
+    _moveTo(zombie, toX, toY, 0)
+    Events.OnZombieUpdate:Fire(zombie)
+
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = nil
+    return fired
+end
+
+test("walking parallel to a north wire does not set it off", function()
+    -- Along the row, west to east, right past a wire on the north edge of (10,10).
+    assert_eq(fireWalk(10, 10, true, 9, 10, 10, 10), 0,
+        "walking the length of a north wire must not trigger it")
+end)
+
+test("crossing a north wire sets it off", function()
+    -- Southward over the boundary between (10,9) and (10,10).
+    assert_eq(fireWalk(10, 10, true, 10, 9, 10, 10), 1,
+        "stepping across a north wire must trigger it")
+end)
+
+test("crossing a north wire the other way sets it off too", function()
+    -- Northward off the wire's own tile, back over the same boundary. The
+    -- walker ends up on (10,9), which holds no wire at all, so this only works
+    -- because the edge is resolved rather than the destination tile.
+    assert_eq(fireWalk(10, 10, true, 10, 10, 10, 9), 1,
+        "leaving across a north wire must trigger it")
+end)
+
+test("walking parallel to a west wire does not set it off", function()
+    -- Down the column, north to south, past a wire on the west edge of (10,10).
+    assert_eq(fireWalk(10, 10, false, 10, 9, 10, 10), 0,
+        "walking the length of a west wire must not trigger it")
+end)
+
+test("crossing a west wire sets it off", function()
+    -- Eastward over the boundary between (9,10) and (10,10).
+    assert_eq(fireWalk(10, 10, false, 9, 10, 10, 10), 1,
+        "stepping across a west wire must trigger it")
+end)
+
+test("a diagonal step across a wire still sets it off", function()
+    -- Corner-clipping a north wire. Deliberately the generous reading: a wire
+    -- you could dodge by approaching at 45 degrees would be worse than the bug.
+    assert_eq(fireWalk(10, 10, true, 9, 9, 10, 10), 1,
+        "a diagonal crossing must trigger")
+end)
+
+test("a jump of more than one tile is not a crossing", function()
+    -- Teleport, vehicle exit or a dropped frame. Crediting it to an edge would
+    -- be inventing a step that never happened.
+    assert_eq(fireWalk(10, 10, true, 10, 7, 10, 10), 0,
+        "a multi-tile jump must not trigger")
+end)
+
+test("a wire saved before #55 has no facing and still fires on any entry", function()
+    -- Old saves record no facing. Passing nil keeps the OLD occupancy
+    -- behaviour for that tile on purpose: a wire from an existing save
+    -- degrading to the previous bug is recoverable, one going silently inert
+    -- is not.
+    assert_eq(fireWalk(10, 10, nil, 9, 10, 10, 10), 1,
+        "a facing-less wire must still trigger, whatever the direction")
+end)
+
+test("a player walking beside a wire is spared too, not just zombies", function()
+    _reset()
+    _makeSquare(9, 10, 0)
+    _makeSquare(10, 10, 0)
+    DeadwireNetwork.registerTile(10, 10, 0, 1, "reinforced_tripline", "alice", true)
+
+    local fired = 0
+    DeadwireDetection.playerHandlers["reinforced_tripline"] = function() fired = fired + 1 end
+
+    local player = _mockPlayer(9, 10, 0, "bob")
+    Events.OnPlayerUpdate:Fire(player)
+    fired = 0
+    _moveTo(player, 10, 10, 0)
+    Events.OnPlayerUpdate:Fire(player)
+
+    DeadwireDetection.playerHandlers["reinforced_tripline"] = nil
+    assert_eq(fired, 0, "the knockback for walking beside your own fence was the whole complaint")
+end)
+
+test("standing still on a wire does not re-trigger it", function()
+    _reset()
+    _makeSquare(10, 9, 0)
+    _makeSquare(10, 10, 0)
+    DeadwireNetwork.registerTile(10, 10, 0, 1, "tin_can_tripline", "alice", true)
+
+    local fired = 0
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = function() fired = fired + 1 end
+
+    local zombie = _mockZombie(10, 9, 0)
+    Events.OnZombieUpdate:Fire(zombie)
+    fired = 0
+    _moveTo(zombie, 10, 10, 0)
+    Events.OnZombieUpdate:Fire(zombie)
+    assert_eq(fired, 1, "the crossing itself fires")
+
+    -- Many ticks, no movement. A trip wire triggers on being crossed.
+    for _ = 1, 5 do Events.OnZombieUpdate:Fire(zombie) end
+    assert_eq(fired, 1, "loitering on a wire is not repeatedly crossing it")
+
+    DeadwireDetection.zombieHandlers["tin_can_tripline"] = nil
+end)
+
+test("the edge helper credits a straight step to exactly one edge", function()
+    -- Guards the arithmetic directly, so a sign error in crossedEdges cannot
+    -- hide behind a wire lookup that happened to miss.
+    local edges = DeadwireDetection.crossedEdges(5, 5, 5, 6)
+    assert_eq(#edges, 1, "one orthogonal step breaks one edge")
+    assert_eq(edges[1].x, 5, "edge stays in the column")
+    assert_eq(edges[1].y, 6, "southward step breaks the north edge of the tile entered")
+    assert_true(edges[1].north, "a north-south step breaks a north edge")
+
+    local back = DeadwireDetection.crossedEdges(5, 6, 5, 5)
+    assert_eq(back[1].y, 6, "the same boundary belongs to the same tile going the other way")
+    assert_true(back[1].north, "still a north edge")
+
+    local east = DeadwireDetection.crossedEdges(5, 5, 6, 5)
+    assert_eq(east[1].x, 6, "eastward step breaks the west edge of the tile entered")
+    assert_false(east[1].north, "an east-west step breaks a west edge")
 end)
 
 -- Put the eight real handlers back, so the files after this one test the mod

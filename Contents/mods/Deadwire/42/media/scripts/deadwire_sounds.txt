@@ -1,47 +1,57 @@
-sound Deadwire_TinCanRattle
+// Every sound block the game ships is wrapped in a module: all 150 vanilla
+// sound scripts in 42.20 do it, without exception. Ours declared `sound` at
+// file scope instead, which is the one structural difference between our
+// silent sounds and the only working examples available to measure against.
+// No other mod installed here ships a sound script, so vanilla is the whole
+// comparison set. Unverified in game as of this edit -- Part H of
+// docs/TEST-PLAN.md is the check that decides it.
+module Base
 {
-    category = Item,
-    is3D = true,
-    clip
+    sound Deadwire_TinCanRattle
     {
-        file = media/sound/tin_can_rattle.ogg,
-        distanceMax = 200,
+        category = Item,
+        is3D = true,
+        clip
+        {
+            file = media/sound/tin_can_rattle.ogg,
+            distanceMax = 200,
+        }
     }
-}
 
-sound Deadwire_WireRattle
-{
-    category = Item,
-    is3D = true,
-    clip
+    sound Deadwire_WireRattle
     {
-        file = media/sound/wire_rattle.ogg,
-        distanceMax = 200,
+        category = Item,
+        is3D = true,
+        clip
+        {
+            file = media/sound/wire_rattle.ogg,
+            distanceMax = 200,
+        }
     }
-}
 
-sound Deadwire_BellRing
-{
-    category = Item,
-    is3D = true,
-    clip
+    sound Deadwire_BellRing
     {
-        file = media/sound/bell_ring.ogg,
-        distanceMax = 300,
+        category = Item,
+        is3D = true,
+        clip
+        {
+            file = media/sound/bell_ring.ogg,
+            distanceMax = 300,
+        }
     }
-}
 
-// Phase 3 (#13). The clip is here now so the sound name resolves; the wire
-// type that plays it does not exist yet. EventHandlers' ElectricZap handler
-// already names it, and without this block it would have played nothing at
-// all, silently, on the day #13 landed.
-sound Deadwire_ElecZap
-{
-    category = Item,
-    is3D = true,
-    clip
+    // Phase 3 (#13). The clip is here now so the sound name resolves; the wire
+    // type that plays it does not exist yet. EventHandlers' ElectricZap handler
+    // already names it, and without this block it would have played nothing at
+    // all, silently, on the day #13 landed.
+    sound Deadwire_ElecZap
     {
-        file = media/sound/electric_zap.ogg,
-        distanceMax = 200,
+        category = Item,
+        is3D = true,
+        clip
+        {
+            file = media/sound/electric_zap.ogg,
+            distanceMax = 200,
+        }
     }
 }

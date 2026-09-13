@@ -244,3 +244,52 @@ option Deadwire.SalvageMaxPercent
     page = Deadwire,
     translation = Deadwire_SalvageMaxPercent,
 }
+
+option Deadwire.EnableTier3
+{
+    type = boolean, default = true,
+    page = Deadwire,
+    translation = Deadwire_EnableTier3,
+}
+
+option Deadwire.ShockPlayerDamage
+{
+    type = integer, default = 15, min = 0, max = 100,
+    page = Deadwire,
+    translation = Deadwire_ShockPlayerDamage,
+}
+
+option Deadwire.ShockPanic
+{
+    type = integer, default = 35, min = 0, max = 100,
+    page = Deadwire,
+    translation = Deadwire_ShockPanic,
+}
+
+option Deadwire.ShockZombieKillChance
+{
+    type = integer, default = 25, min = 0, max = 100,
+    page = Deadwire,
+    translation = Deadwire_ShockZombieKillChance,
+}
+
+option Deadwire.FencePulseChance
+{
+    type = integer, default = 50, min = 0, max = 100,
+    page = Deadwire,
+    translation = Deadwire_FencePulseChance,
+}
+
+option Deadwire.FenceBreakChance
+{
+    type = integer, default = 2, min = 0, max = 100,
+    page = Deadwire,
+    translation = Deadwire_FenceBreakChance,
+}
+
+option Deadwire.ElectricPowerDraw
+{
+    type = integer, default = 20, min = 0, max = 200,
+    page = Deadwire,
+    translation = Deadwire_ElectricPowerDraw,
+}

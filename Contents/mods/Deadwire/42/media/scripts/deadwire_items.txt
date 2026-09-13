@@ -27,6 +27,15 @@ module Base
         Tags = deadwire:kit,
     }
 
+    item Deadwire_ElectricTripLineKit
+    {
+        ItemType = base:normal,
+        DisplayCategory = Deadwire,
+        Weight = 2.0,
+        Icon = Deadwire_ElectricTripLineKit,
+        Tags = deadwire:kit,
+    }
+
     item Deadwire_TanglefootKit
     {
         ItemType = base:normal,

@@ -308,6 +308,180 @@ kits, place six. The sixth should refuse, with
 
 ---
 
+## Part H: does the audio work at all (#49)
+
+Rob heard nothing when a tin can wire broke, and nobody knew whether the sound
+name never registered or registered and played too quietly. Those need opposite
+fixes, so this measures the registration before it plays anything.
+
+What was ruled out first, by measurement rather than by listening again: all
+four oggs are mono 44.1kHz and peak at full scale, so they are neither stereo
+nor silent; `category = Item` is the most-used category in the game's own sound
+scripts, 1521 blocks of it; `is3D` and `clip.file` are both real fields on
+`GameSound` and `GameSoundClip` in the 42.20 jar; and `PlayWorldSound`'s 6-arg
+overload exists with the types we pass.
+
+What was left is that `deadwire_sounds.txt` declared its `sound` blocks at file
+scope. All 150 vanilla sound scripts wrap them in `module Base { }`, without
+exception. Ours was the only file that did not. No other mod installed here
+ships a sound script at all, so vanilla is the entire comparison set and this
+is a strong lead rather than a proven cause. That is now fixed, and Part H is
+what decides whether it was the cause.
+
+**H1.** With the game running and a save loaded:
+
+```
+cd c:/xampp/htdocs/pz-test-pilot
+python scripts/cmd.py deadwire_probe_audio step=check
+```
+
+Silent, safe any time. Four `AU1.*` lines, one per sound. Each one is `PASS` if
+`getGameSound` returns something and `FAIL` with "the script block did not
+parse" if it returns nil. This is the whole question: a nil here means no volume
+change and no playback change could ever have helped.
+
+**H2.** Then, with your speakers up:
+
+```
+python scripts/cmd.py deadwire_probe_audio step=play
+```
+
+Each registered sound is played three ways in a row: the mod's own
+`PlayWorldSound` call (`a`), the character's emitter (`b`), and
+`character:playSound` (`c`). Say which of the three you heard. If only `b` and
+`c` are audible, the fix is to change the mod's playback call, not the audio.
+
+**H3.** Only once H1 and H2 are green, do it for real: walk into a tin can wire
+and listen. That is the check #49 is actually about; H1 and H2 exist so that a
+failure here has a known cause.
+
+---
+
+## Part I: crossing a wire vs walking beside it (#55)
+
+The bug: detection fired on tile occupancy, so walking the LENGTH of your own
+perimeter set off every wire in it. Reinforced knocked you flat for walking
+beside your own fence. This is the check that it stopped.
+
+**I1.** Place a run of reinforced wire four tiles long in a straight line.
+Walk **along** it, parallel, right next to it, from one end to the other.
+Nothing should happen. No rattle, no knockback, nothing in the log.
+
+**I2.** Now walk **across** the same run. It fires.
+
+**I3.** Cross it again from the other side. It fires. The wire does not care
+which direction you cross, only that you crossed.
+
+**I4.** Stand still on a wire tile for ten seconds. It fires **once**, when you
+step on. A trip line triggers on being crossed, not on being stood on. This is
+a deliberate behaviour change and the old build would have re-fired.
+
+**I5.** Approach a wire diagonally and cross the corner. It fires. Wires must
+not be dodgeable at 45 degrees.
+
+**I6.** Load a save made before this session, with wires already in it. They
+still fire. Old wires have no recorded facing, so they keep the OLD behaviour
+(fire on any entry) rather than going inert. Walk beside one: it will still
+misfire, and that is correct for an old wire until the chunk reloads and the
+facing is recovered off the object. Walk away 100 tiles, come back, and it
+should behave like I1 from then on.
+
+---
+
+## Part J: the electrified deadwire (#13)
+
+Needs power. The quickest way to a powered square is the harness:
+
+```
+cd c:/xampp/htdocs/pz-test-pilot
+python scripts/cmd.py deadwire_probe_setup step=teleport
+python scripts/cmd.py deadwire_probe_setup step=build
+python scripts/cmd.py deadwire_probe_electric step=report
+```
+
+`step=report` is read-only and prints the power reading at the generator, at
+the fence, and at your own feet, plus the state of the vanilla
+`AllowExteriorGenerator` option. **Read that before anything else.** Session 25
+lost most of a session to two power readings that were true for reasons nobody
+had looked at, and this step exists so that cannot happen silently again.
+
+**J1.** `python scripts/cmd.py deadwire_probe_electric step=wires` lays four
+electric wires east of the generator. Expect `EW1` four placed, `EW2` all one
+circuit, `EW3` the far end reads live. If `EW3` fails, the generator is out of
+fuel or switched off: rebuild it rather than trusting a reading.
+
+**J2.** `step=cross` puts you two tiles north of the run and tells you whether
+it is live. Walk south across it. Expect a zap, damage to a leg or foot, being
+thrown **backwards** off the wire, going down, and the panic moodle appearing.
+
+**J3.** Now walk east **along** the row without crossing. Nothing at all. This
+is Part I again on the wire type where getting it wrong hurts most.
+
+**J4.** Turn the generator off, or let it run dry, and cross again. It should
+**rattle and do nothing else**. An unpowered electric wire is still a trip line
+on purpose: a survivalist whose generator died should have an alarm, not a wire
+that silently stopped working.
+
+**J5.** Craft one the normal way. It needs Electricity 3 and Trapping 2, one
+Wire, two Electric Wire, two Nails and a screwdriver. It should appear in the
+crafting menu under Deadwire and read "Electrified Deadwire", not a raw id.
+
+**J6.** Check the sound radius by ear: the electric line should be the
+**quietest** of the trip lines, quieter even than the tin cans. It is meant not
+to be found.
+
+---
+
+## Part K: the electrified fence (#52)
+
+**K1.** `python scripts/cmd.py deadwire_probe_electric step=fence` electrifies
+the StickFence the setup probe built. Expect `EF1` a real fence sprite, `EF2`
+on the register, `EF3` reads powered, `EF4` a pulse runs without throwing.
+
+**K2.** Right-click the fence. The menu offers **Disconnect fence wiring**.
+Right-click a fence that is not electrified: it offers **Electrify this fence**
+instead. Never both.
+
+**K3.** Get a zombie to walk into the fence (`-debug`, right-click the ground,
+Debug > Add Zombie is the only way that has ever worked here). Within a second
+or two it should be thrown off and knocked down, or killed outright. It pulses
+on a clock, so it will not always bite instantly; that is the mechanic, not a
+bug.
+
+**K4.** Stand against the fence yourself. Same treatment: damage, thrown back,
+panic. Turn `WireOwnerImmunity` on in the sandbox settings and stand against
+your own fence again: now it leaves you alone.
+
+**K5. The one that could still sink this.** Save, quit to the main menu, reload
+the save. Right-click the fence: it must still offer **Disconnect**, and a
+zombie must still get bitten. The register of live fences is kept in the mod's
+own save data rather than as modData on the fence object, precisely because
+nobody has ever checked whether modData survives a reload on an object the mod
+did not create. If K5 fails, that choice was not enough and the attachment
+model needs rethinking.
+
+**K6.** Let it bite something twenty or thirty times. The wiring has a 2%
+chance per bite of burning out, at which point the fence goes off the register
+and has to be reconnected. **The fence itself must never be destroyed.** A
+fence has deflection and cover built into it in a way a bare wire does not, so
+electrifying it must not blow up the thing it is attached to.
+
+---
+
+## Part L: uncovering a camouflaged wire (#56)
+
+**L1.** Camouflage a wire. Right-click it again: the menu now offers **Uncover**
+where it used to offer Camouflage, and never offers both. That is also the only
+visual tell there is, because the sprite looks identical either way.
+
+**L2.** Click Uncover. Your character walks to the wire, plays a shorter action
+than camouflaging did, and the wire becomes visible again.
+
+**L3.** Save, reload, and check the wire is still uncovered. Camouflage state
+lives in two places and only writing one of them was #34.
+
+---
+
 ## What single player cannot test
 
 Say the word and I will write the dedicated-server version of this, but none of
