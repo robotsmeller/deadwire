@@ -74,7 +74,8 @@ handlers["WirePlaced"] = function(args)
         args.x, args.y, args.z,
         args.networkId,
         args.wireType,
-        args.ownerId
+        args.ownerId,
+        args.north
     )
 
     -- Cache the IsoObject reference for client-side camo visibility
@@ -137,7 +138,8 @@ handlers["WireNetworkSync"] = function(args)
                 wire.x, wire.y, wire.z,
                 wire.networkId,
                 wire.wireType,
-                wire.ownerId
+                wire.ownerId,
+                wire.north
             )
             if wire.camouflaged then
                 DeadwireNetwork.setCamouflaged(

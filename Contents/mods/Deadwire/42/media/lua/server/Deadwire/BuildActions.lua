@@ -81,6 +81,7 @@ function ISDeadwireTripLine:create(x, y, z, north, sprite)
         networkId = networkId,
         wireType = wireType,
         ownerId = username,
+        north = north and true or false,
     })
 end
 

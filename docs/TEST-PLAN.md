@@ -308,6 +308,55 @@ kits, place six. The sixth should refuse, with
 
 ---
 
+## Part H: does the audio work at all (#49)
+
+Rob heard nothing when a tin can wire broke, and nobody knew whether the sound
+name never registered or registered and played too quietly. Those need opposite
+fixes, so this measures the registration before it plays anything.
+
+What was ruled out first, by measurement rather than by listening again: all
+four oggs are mono 44.1kHz and peak at full scale, so they are neither stereo
+nor silent; `category = Item` is the most-used category in the game's own sound
+scripts, 1521 blocks of it; `is3D` and `clip.file` are both real fields on
+`GameSound` and `GameSoundClip` in the 42.20 jar; and `PlayWorldSound`'s 6-arg
+overload exists with the types we pass.
+
+What was left is that `deadwire_sounds.txt` declared its `sound` blocks at file
+scope. All 150 vanilla sound scripts wrap them in `module Base { }`, without
+exception. Ours was the only file that did not. No other mod installed here
+ships a sound script at all, so vanilla is the entire comparison set and this
+is a strong lead rather than a proven cause. That is now fixed, and Part H is
+what decides whether it was the cause.
+
+**H1.** With the game running and a save loaded:
+
+```
+cd c:/xampp/htdocs/pz-test-pilot
+python scripts/cmd.py deadwire_probe_audio step=check
+```
+
+Silent, safe any time. Four `AU1.*` lines, one per sound. Each one is `PASS` if
+`getGameSound` returns something and `FAIL` with "the script block did not
+parse" if it returns nil. This is the whole question: a nil here means no volume
+change and no playback change could ever have helped.
+
+**H2.** Then, with your speakers up:
+
+```
+python scripts/cmd.py deadwire_probe_audio step=play
+```
+
+Each registered sound is played three ways in a row: the mod's own
+`PlayWorldSound` call (`a`), the character's emitter (`b`), and
+`character:playSound` (`c`). Say which of the three you heard. If only `b` and
+`c` are audible, the fix is to change the mod's playback call, not the audio.
+
+**H3.** Only once H1 and H2 are green, do it for real: walk into a tin can wire
+and listen. That is the check #49 is actually about; H1 and H2 exist so that a
+failure here has a known cause.
+
+---
+
 ## What single player cannot test
 
 Say the word and I will write the dedicated-server version of this, but none of

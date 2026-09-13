@@ -380,8 +380,21 @@ function _getSoundCalls() return _soundCalls end
 -----------------------------------------------------------------
 -- Entity builders for detection tests
 -----------------------------------------------------------------
+-- Detection fires on a tile CROSSING, not on tile occupancy (#55), so a mock
+-- that has never been anywhere cannot trigger anything: with no previous tile
+-- there is no step, and with no step there is no edge to have broken. Every
+-- mock therefore arrives from the tile directly north of it, which is the
+-- ordinary case a test means when it says "a zombie on the wire tile".
+-- _stepTo below is for tests that care which way it came from.
+local function _seedArrival(modData, x, y, z)
+    modData["dw_lastX"] = x
+    modData["dw_lastY"] = y - 1
+    modData["dw_lastZ"] = z
+end
+
 function _mockZombie(x, y, z, alive)
     local modData = {}
+    _seedArrival(modData, x, y, z)
     local sq = _squares[x .. "," .. y .. "," .. z]
     local z_ = {
         _class      = "IsoZombie",
@@ -465,6 +478,7 @@ end
 
 function _mockPlayer(x, y, z, username)
     local modData = {}
+    _seedArrival(modData, x, y, z)
     local sq = _squares[x .. "," .. y .. "," .. z]
     local inv = _makeInventory()
     local p = {

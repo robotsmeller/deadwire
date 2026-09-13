@@ -572,3 +572,127 @@ test("getAllTiles keys match tileKey format", function()
     local expected_key = DeadwireNetwork.tileKey(7, 8, 0)
     assert_not_nil(all[expected_key], "getAllTiles should use tileKey format")
 end)
+
+
+suite("WireNetwork: circuit adjacency (#53)")
+
+-- An energiser powers a RUN of wire, not a radius, and until now the network
+-- table could not express that: every placement minted a fresh networkId, so
+-- it was a 1:1 mirror of the tile index with no adjacency in it at all. Both
+-- electric features are built on the sentence this suite tests.
+
+local function circuitOf(x, y, z)
+    local t = DeadwireNetwork.getTile(x, y, z)
+    return t and t.circuitId
+end
+
+test("two wires laid side by side share a circuit", function()
+    _reset()
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(6, 5, 0, 2, "tin_can_tripline", "alice", true)
+    assert_eq(circuitOf(5, 5, 0), circuitOf(6, 5, 0),
+        "adjacent wires are one run, whatever networkId they were minted with")
+end)
+
+test("two wires with a gap between them are separate circuits", function()
+    _reset()
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(7, 5, 0, 2, "tin_can_tripline", "alice", true)
+    assert_true(circuitOf(5, 5, 0) ~= circuitOf(7, 5, 0),
+        "a one-tile gap is a break in the run")
+end)
+
+test("diagonal neighbours are not connected", function()
+    _reset()
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(6, 6, 0, 2, "tin_can_tripline", "alice", true)
+    assert_true(circuitOf(5, 5, 0) ~= circuitOf(6, 6, 0),
+        "current does not jump a corner")
+end)
+
+test("wires on different floors are not connected", function()
+    _reset()
+    DeadwireNetwork.registerTile(5, 5, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(5, 5, 1, 2, "tin_can_tripline", "alice", true)
+    assert_true(circuitOf(5, 5, 0) ~= circuitOf(5, 5, 1),
+        "a run does not climb a storey")
+end)
+
+test("a long run is one circuit end to end", function()
+    _reset()
+    for i = 0, 9 do
+        DeadwireNetwork.registerTile(10 + i, 4, 0, i + 1, "tin_can_tripline", "alice", true)
+    end
+    local first = circuitOf(10, 4, 0)
+    for i = 0, 9 do
+        assert_eq(circuitOf(10 + i, 4, 0), first, "tile " .. i .. " is on the same run")
+    end
+end)
+
+test("pulling a wire out of the middle SPLITS the run in two", function()
+    -- The case that makes union-find awkward and a plain re-flood easy, and
+    -- the reason the whole thing is recomputed on every remove.
+    _reset()
+    for i = 0, 4 do
+        DeadwireNetwork.registerTile(20 + i, 8, 0, i + 1, "tin_can_tripline", "alice", true)
+    end
+    assert_eq(circuitOf(20, 8, 0), circuitOf(24, 8, 0), "one run to start with")
+
+    DeadwireNetwork.unregisterTile(22, 8, 0)
+
+    assert_true(circuitOf(20, 8, 0) ~= circuitOf(24, 8, 0),
+        "cutting the middle leaves two independent runs")
+    assert_eq(circuitOf(20, 8, 0), circuitOf(21, 8, 0), "west half stays together")
+    assert_eq(circuitOf(23, 8, 0), circuitOf(24, 8, 0), "east half stays together")
+end)
+
+test("joining two runs with one wire merges them", function()
+    _reset()
+    DeadwireNetwork.registerTile(30, 8, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(32, 8, 0, 2, "tin_can_tripline", "alice", true)
+    assert_true(circuitOf(30, 8, 0) ~= circuitOf(32, 8, 0), "separate to begin with")
+
+    DeadwireNetwork.registerTile(31, 8, 0, 3, "tin_can_tripline", "alice", true)
+    assert_eq(circuitOf(30, 8, 0), circuitOf(32, 8, 0),
+        "the bridging wire makes one run of them")
+end)
+
+test("getCircuitTiles returns the whole run, including the tile asked about", function()
+    _reset()
+    for i = 0, 3 do
+        DeadwireNetwork.registerTile(40 + i, 9, 0, i + 1, "tin_can_tripline", "alice", true)
+    end
+    DeadwireNetwork.registerTile(50, 9, 0, 9, "tin_can_tripline", "alice", true)
+
+    local run = DeadwireNetwork.getCircuitTiles(41, 9, 0)
+    assert_eq(#run, 4, "four tiles in the run, and not the loose one at 50")
+
+    local sawSelf = false
+    for _, t in ipairs(run) do
+        if t.x == 41 and t.y == 9 then sawSelf = true end
+    end
+    assert_true(sawSelf, "the tile asked about is part of its own run")
+end)
+
+test("getCircuitTiles on a bare tile returns nothing rather than failing", function()
+    _reset()
+    assert_eq(#DeadwireNetwork.getCircuitTiles(99, 99, 0), 0, "no wire, no run")
+end)
+
+test("the facing is stored and comes back out", function()
+    _reset()
+    DeadwireNetwork.registerTile(3, 3, 0, 1, "tin_can_tripline", "alice", true)
+    DeadwireNetwork.registerTile(4, 3, 0, 2, "tin_can_tripline", "alice", false)
+    assert_true(DeadwireNetwork.getTile(3, 3, 0).north, "north wire records north")
+    assert_false(DeadwireNetwork.getTile(4, 3, 0).north, "west wire records west")
+end)
+
+test("a wire registered with no facing keeps nil, not a guessed default", function()
+    -- nil means "saved before #55, facing unknown" and detection treats it as
+    -- the old occupancy rule. Defaulting it to false here would silently claim
+    -- every old wire faces west, and half of them would stop firing.
+    _reset()
+    DeadwireNetwork.registerTile(3, 9, 0, 1, "tin_can_tripline", "alice")
+    assert_true(DeadwireNetwork.getTile(3, 9, 0).north == nil,
+        "unknown must stay unknown")
+end)

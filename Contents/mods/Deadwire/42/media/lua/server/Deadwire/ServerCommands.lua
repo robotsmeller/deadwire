@@ -391,7 +391,13 @@ handlers["DebugPlaceWire"] = function(player, args)
     end
 
     local networkId = DeadwireNetwork.generateNetworkId()
-    local obj = DeadwireWireManager.createWire(sq, wireType, username, networkId)
+    -- Facing is a real argument here, not a constant. The harness used to
+    -- hardcode one side for every wire it placed, which read in game as
+    -- "wires always sit on the top-left" and briefly looked like a bug in the
+    -- mod (Session 27). Default west so the old behaviour is unchanged when
+    -- nothing asks.
+    local north = args and args.north and true or false
+    local obj = DeadwireWireManager.createWire(sq, wireType, username, networkId, north)
     if not obj then return end
 
     DeadwireConfig.log("DEBUG wire at " .. x .. "," .. y .. "," .. z .. " type=" .. wireType)
@@ -403,6 +409,7 @@ handlers["DebugPlaceWire"] = function(player, args)
         networkId = networkId,
         wireType = wireType,
         ownerId = username,
+        north = north,
     })
 end
 
