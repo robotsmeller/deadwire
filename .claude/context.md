@@ -3,67 +3,66 @@
 ```yaml
 project: Deadwire
 description: PZ mod — perimeter trip lines and electric fencing for Project Zomboid (B42+)
-last_session: 27
-last_updated: 2026-09-10
-continue_with: "Another art pass on the wire sprites (Rob's call: correct-but-crude shipped, a real redraw is next). Separately, three behaviour bugs found live and NOT fixed yet: #55 trigger detection has no direction check, #56 camo cannot be reversed and gives no visual tell, #48 confirmed to be the object's engine bounds rather than the sprite (root-caused, not fixed). Still outstanding from before: #49 tin can audio, Parts C-G of docs/TEST-PLAN.md (#25)."
-blockers: "#27 and #45 need a decision from Rob. #48/#55/#56 need actual fixes, scoped below -- none touched yet, this was a look-and-report session."
+last_session: 28
+last_updated: 2026-09-13
+continue_with: "IN-GAME TESTING, and only that. Session 28 built a lot and verified none of it in a running game. Work docs/TEST-PLAN.md Parts H through L in order: H audio (#49), I crossing vs walking beside (#55), J the electrified deadwire (#13), K the electrified fence (#52, and K5 is the one that could still sink its design), L uncovering camouflage (#56). Then Parts C-G, which have never been run at all (#25)."
+blockers: "Nothing blocks the testing. #27 (bell vs reinforced are stat-identical) and #45 (wire damage and spans) still need a decision from Rob and nothing else. The Workshop upload needs Rob at the Steam uploader; workshop.txt, preview.png and the poster are all in place now."
 ```
 
 ## To Resume
 
 ```
-Deadwire v0.1.1, Session 28. Start from origin/main. Tree clean, 12 issues open.
+Deadwire v0.1.1, Session 29. Start from origin/main. Tree clean, 7 issues open.
 
-Session 26's #51 fix is CONFIRMED live: Rob looked at all four wire types on
-the ground, plain sprites sit correctly on the tile edge and no longer draw
-over him walking past. Per Rule 12, that confirmation is what makes it done --
-the earlier handoff explicitly said the code fix alone did not count.
+Session 28 was a BUILD session and nothing in it has been watched running.
+Five issues closed on green tests alone, which per Rule 12 is not evidence.
+The single job of session 29 is to look at it in a game.
 
-Same session, in-game testing surfaced three real behaviour bugs, none fixed:
+What landed, all merged to main in PR #57:
 
-- #48 (existing) confirmed root-caused, not fixed: the owner/camo glow
-  outline still floats over the character exactly like the old sprite bug did,
-  because CamoVisibility.lua's setOutlineHighlight() draws off the IsoObject's
-  engine bounds, not the sprite pixels. #51 never touched this -- it is a
-  wholly separate draw path. Needs its own fix, likely renderYOffset or a
-  collision-bounds adjustment on the object.
-- #55 (new): trigger detection has no direction check at all.
-  TriggerHandlers.lua fires on tile occupancy only, so walking parallel to a
-  wire sets it off exactly like crossing it. Needs design input first: what
-  "crossing" means precisely (previous-tile-to-current-tile vector against the
-  wire's edge is the obvious approach).
-- #56 (new): camouflage is one-way. WireActions.lua's isValid() explicitly
-  refuses CamouflageWire once already camouflaged, and no reverse command
-  exists anywhere in the mod. Also no visual difference on the sprite between
-  camouflaged and plain, so the owner can't tell by looking whether it took.
-
-Sprite legibility at the new half-width is rougher than before -- accepted
-tradeoff, Rob's explicit call to ship placeholder-grade art and ask Workshop
-users for help, but NEXT SESSION is a real art pass rather than another
-geometry fix, since the geometry itself is now confirmed correct.
-
-TALK TO ROB IN PLAIN WORDS, no issue numbers, no labels only we understand.
-
-NEXT SESSION: either the art pass (redraw from the corrected
-process_sprite_render.py prompt, needs a live render + tools/fix_sprite_geometry.py
-re-seat), or start on #48/#55/#56 fixes -- Rob's call which comes first. #49
-tin can audio and TEST-PLAN Parts C-G are still outstanding but lower priority
-than the three fresh bugs.
+- Wires now fire on the EDGE they were crossed, not the tile they sit on
+  (#55). Walking the length of your own perimeter no longer sets off every
+  wire in it. Two behaviour changes fall out of this: standing still on a
+  wire no longer re-triggers it, and entities carry three more modData keys.
+- Circuit adjacency (#53): a run is a connected component over orthogonally
+  adjacent tiles, recomputed whole at place and remove time.
+- Electrified deadwire (#13) and electrified fencing (#52). One power call,
+  square:haveElectricity(), paired with AllowExteriorGenerator outdoors.
+  There is NO separate energiser object: a run is live if any tile of it
+  stands on a powered square. That was a deliberate scope call, logged in
+  .claude/afk-log.md, and it is reversible -- the power question is isolated
+  behind DeadwirePower.isCircuitLive.
+- Camouflage can be undone (#56), and which menu option shows is the only
+  visual tell there is.
+- Workshop packaging: poster.png (generated, placeholder), workshop.txt,
+  preview.png. mod.info had pointed at a poster that never existed.
+- Audio (#49): the sound script declared its blocks at file scope. All 150
+  vanilla sound scripts wrap them in `module Base { }`. Fixed, NOT verified,
+  issue deliberately left open.
 
 TALK TO ROB IN PLAIN WORDS, no issue numbers, no labels only we understand.
 
 HARNESS: cd c:/xampp/htdocs/pz-test-pilot, scripts/cmd.py get_status.
 loadstring is off so run_lua always throws. cmd.py can't pass a real JSON
 array through args=; call _ipc.send_command from a short Python script for a
-list. teleportTo(x,y,z) is a real, verified IsoGameCharacter method -- the old
-"teleport is broken" note was about a different, nonexistent one.
+list. teleportTo(x,y,z) is a real, verified IsoGameCharacter method.
 
-`deadwire_probe_setup` (pz-test-pilot) teleports to a fixed outdoor site
-(8504,9414,0) and builds a real activated generator + StickFence in two steps
-(step=teleport, step=build) -- reuse it rather than hand-building a base. A
-generator left running for days burns its tank dry; remove_object + rebuild
+`deadwire_probe_setup` (step=teleport, then step=build) teleports to a fixed
+outdoor site (8504,9414,0) and builds a real activated generator + StickFence.
+A generator left running for days burns its tank dry; remove_object + rebuild
 before trusting a power reading, and advance_time past ElecShutModifier
 BEFORE building, not after.
+
+NEW in session 28:
+  `deadwire_probe_audio  step=check`   is the sound registered at all
+  `deadwire_probe_audio  step=play`    play it three ways, say which you heard
+  `deadwire_probe_electric step=report` READ-ONLY power readings, run first
+  `deadwire_probe_electric step=wires`  lay a four-tile electric run
+  `deadwire_probe_electric step=fence`  electrify the StickFence
+  `deadwire_probe_electric step=cross`  position for the crossing test
+
+Gates: run_tests.bat 398 pass over 17 files, verify_names.py 392 refs,
+validate_pack.py 130 checks. PowerShell, not Git Bash.
 ```
 
 ## How PZ actually loads and routes mod Lua
@@ -116,7 +115,7 @@ Art is finished. What remains here is only what breaks if you touch it.
 earlier renumbers everything after it, silently.
 
 ```
-0/1 bell      2/3 electric (banked for #13, absent from Sprites on purpose)
+0/1 bell      2/3 electric (in use since Session 28, #13)
 4/5 reinforced   6/7 tanglefoot   8/9 tincan
 ```
 
@@ -232,36 +231,98 @@ the player is standing next to it when the server's four-tile bound is checked.
 
 ## Gates
 
-All local, no CI. `run_tests.bat` compiles **all 14** mod `.lua` files
+All local, no CI. `run_tests.bat` compiles **all 17** mod `.lua` files
 (`tests/syntax_check.lua`) and stops there on failure, then runs the suite,
-**346 pass**. PowerShell, not Git Bash -- `cmd //c` fails on the path, not the
-tests. `python scripts/verify_names.py` **322 refs**. `python
+**398 pass**. PowerShell, not Git Bash -- `cmd //c` fails on the path, not the
+tests. `python scripts/verify_names.py` **392 refs**. `python
 tools/validate_pack.py` **130 checks**.
 
 The syntax gate enumerates the tree rather than carrying a file list, and
 finding zero files is a failure, not a pass. It compiles without executing, so
-a file-scope call that throws at runtime gets past it; requiring all fourteen
+a file-scope call that throws at runtime gets past it; requiring all seventeen
 in `tests/run.lua` is what catches that.
 
 ## Open Issues
 
-Ten open. #54 closed in Session 25, #51 closed in Session 26 (fix not yet
-verified live -- see NEXT IN-GAME SESSION above).
+Seven open. #13, #52, #53, #55 and #56 all closed in Session 28 by PR #57 --
+on green tests, which is not the same as working, and Parts H-L of the test
+plan are what would make them real.
 
-- **Next, in game:** verify the #51 sprite fix, #49 the tin can audio check,
-  #25 Parts C-G of the test plan, #12 one real container sighting.
-- **Ready to build, no game needed to start:** #13 electrified deadwire and
-  #52 electrified fence -- both were blocked on Tier 3 probes, both answered.
-  #53 circuit adjacency, the one genuinely new piece of code Tier 3 needs.
-  #46 camouflage materials, already decided as Rob wanted it, just needs
-  building.
-- **Needs a decision from Rob:** #27 bell and reinforced are the same wire with
-  a different noise. #45 wire damage, spans, tanglefoot wear.
-- **Art, batch them:** #48 outline box sized to engine bounds, not sprite art
-  -- very likely the same root cause as #51, recheck live before fixing.
-  tin_can_rattle.ogg needs mastering.
+- **Next, in game, and this is the whole job:** Parts H-L of
+  docs/TEST-PLAN.md cover everything Session 28 built. Then #49 the tin can
+  audio, #25 Parts C-G, #12 one real container sighting.
+- **Needs a decision from Rob:** #27 bell and reinforced are the same wire
+  with a different noise. #45 wire damage, spans, tanglefoot wear.
+- **Art:** #48 the owner/camo outline box is drawn off the object's engine
+  bounds rather than the sprite art, a separate draw path from the #51 fix.
+  tin_can_rattle.ogg needs mastering. The sprites themselves are still
+  placeholder-grade, and workshop.txt now asks Workshop users for help.
+- **Deliberately not done:** the electrified deadwire kit is craft-only and
+  is not in any loot table. Tier 3 gated behind Electricity 3 should not be
+  lying in a toolbox.
 
 ## Recent sessions
+
+### Session 28 (2026-09-13): built the whole electric tier, verified none of it
+
+Rob asked what was really blocking launch, then said to do everything
+possible out of game and stop when it was ready to test. Five issues closed,
+three commits, one PR merged, and not one line of it watched in a game.
+
+**The launch answer, which was smaller than expected.** Almost nothing
+technical was blocking. Two missing files stopped a Workshop upload:
+mod.info pointed at 42/poster.png, which had never existed, and there was no
+workshop.txt or preview image. Both made this session. The real risk was
+that a zombie tripping a wire had never been observed, but zombies and
+players share one detection function and the player half was confirmed in
+Session 27, so that is a look-once job rather than an unknown.
+
+**#55 was the one that would have earned bad reviews.** Detection fired on
+tile occupancy, so a wire went off when you walked ALONG it. The facing was
+being thrown away the instant the object was built, even though the sprite
+and the IsoThumpable were both constructed from it. Now recorded, persisted,
+broadcast, and recovered off the object's own getNorth() for older saves. The
+edge convention that makes the arithmetic honest: the boundary between
+(x,y-1) and (x,y) is the NORTH edge of (x,y). Diagonals are credited to both
+components deliberately, because a wire dodgeable at 45 degrees would be
+worse than the bug.
+
+**The audio, diagnosed by measurement rather than by listening again.** Ruled
+out first, each with evidence: all four oggs are mono 44.1kHz peaking at full
+scale, so neither stereo nor silent; category = Item is the most-used
+category in the game's own scripts, 1521 blocks of it; is3D and clip.file are
+both real fields on GameSound and GameSoundClip in the 42.20 jar; and
+PlayWorldSound's 6-arg overload exists with the types we pass. What was left:
+all 150 vanilla sound scripts wrap their blocks in a module and ours did not.
+Rob offered to record louder sounds and the measurement is what said not to
+bother. Unverified, so #49 stays open.
+
+**Tier 3, both halves.** The power model is one call and deliberately nothing
+more, so any power mod that energises a square the vanilla way works for
+free. The scope call worth knowing: there is no separate energiser object. A
+run is live when any tile of it stands on a powered square. The design asks
+for a real energiser and that is the better shape, but it needs an item, a
+recipe, a sprite and a build action before one wire could be tested. The
+power question is isolated behind isCircuitLive, so adding it later changes
+which square gets asked and nothing else.
+
+For the fence, the register of live fences is kept in OUR GlobalModData
+rather than as modData on the fence object. #52 flagged foreign-object
+modData surviving a reload as load-bearing and unverified; keeping our own
+list turns that into a cosmetic unknown. Part K5 of the test plan is still
+the check that could sink it.
+
+**Two own goals worth keeping.** The direction tests failed on first run
+because the mock entities were seeded with an arrival history, which made the
+step under test a two-tile jump -- a test-harness bug wearing a code bug's
+clothes, and I nearly went looking in the wrong file. And I wrote "every
+other mod on this machine wraps its sound blocks in a module" into two files
+before checking; no other installed mod ships a sound script at all, so
+vanilla was the whole comparison set. Corrected both before committing.
+
+Eleven mutations confirmed biting across the two features, plus a no-op
+control that stayed green, which is the check that the suite is not failing
+for unrelated reasons.
 
 ### Session 27 (2026-09-10): live-verified #51, found three bugs it was never going to fix
 
