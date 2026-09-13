@@ -344,6 +344,106 @@ handlers["CamouflageWire"] = function(player, args)
 end
 
 -----------------------------------------------------------
+-- UncamouflageWire (#56)
+--
+-- Camouflage was one-way. isValid() refused a second Camouflage once the wire
+-- was hidden, and no reverse command existed anywhere in the mod, so a wire
+-- you hid stayed hidden for the life of the save. Worse, the sprite looks
+-- identical either way, so the owner could not tell by looking whether it had
+-- even worked.
+--
+-- Same authority as hiding it: revealing someone else's wire is as much a
+-- change to their perimeter as hiding it.
+-----------------------------------------------------------
+
+handlers["UncamouflageWire"] = function(player, args)
+    if not hasPosition(args) then return end
+
+    local wire = DeadwireNetwork.getTile(args.x, args.y, args.z)
+    if not wire or not wire.camouflaged then return end
+
+    local username = player:getUsername() or "SP"
+    if wire.ownerId ~= username and not isPrivileged(player) then
+        DeadwireConfig.log("UncamouflageWire: " .. username .. " not authorized")
+        return
+    end
+
+    if not withinReach(player, args.x, args.y, args.z) then
+        DeadwireConfig.log("UncamouflageWire: " .. username .. " too far from "
+            .. args.x .. "," .. args.y .. "," .. args.z)
+        return
+    end
+
+    DeadwireNetwork.setCamouflaged(args.x, args.y, args.z, false, 0)
+    DeadwireWireManager.saveCamo(args.x, args.y, args.z, false, 0)
+
+    sendServerCommand(DeadwireConfig.MODULE, "WireCamouflaged", {
+        x = args.x,
+        y = args.y,
+        z = args.z,
+        camouflaged = false,
+        durability = 0,
+    })
+end
+
+-----------------------------------------------------------
+-- ElectrifyFence / DeElectrifyFence (#52)
+--
+-- The farmer's half of Tier 3. Server-authoritative like everything else: the
+-- client asks, the server finds the fence itself rather than trusting a
+-- reported object, per key rule 11.
+-----------------------------------------------------------
+
+handlers["ElectrifyFence"] = function(player, args)
+    if not DeadwireConfig.isTierEnabled(3) then return end
+    if not hasPosition(args) then return end
+    if DeadwireFences == nil then return end
+
+    local username = player:getUsername() or "SP"
+    if not withinReach(player, args.x, args.y, args.z) then
+        DeadwireConfig.log("ElectrifyFence: " .. username .. " too far from "
+            .. args.x .. "," .. args.y .. "," .. args.z)
+        return
+    end
+
+    local sq = getWorld():getCell():getGridSquare(args.x, args.y, args.z)
+    local ok, why = DeadwireFences.electrify(sq, username)
+    if not ok then
+        DeadwireConfig.log("ElectrifyFence refused at " .. args.x .. "," .. args.y
+            .. ": " .. tostring(why))
+        return
+    end
+
+    sendServerCommand(DeadwireConfig.MODULE, "FenceElectrified", {
+        x = args.x, y = args.y, z = args.z, electrified = true,
+    })
+end
+
+handlers["DeElectrifyFence"] = function(player, args)
+    if not hasPosition(args) then return end
+    if DeadwireFences == nil then return end
+
+    local username = player:getUsername() or "SP"
+    if not withinReach(player, args.x, args.y, args.z) then
+        DeadwireConfig.log("DeElectrifyFence: " .. username .. " too far from "
+            .. args.x .. "," .. args.y .. "," .. args.z)
+        return
+    end
+
+    local sq = getWorld():getCell():getGridSquare(args.x, args.y, args.z)
+    local ok, why = DeadwireFences.deElectrify(sq)
+    if not ok then
+        DeadwireConfig.log("DeElectrifyFence refused at " .. args.x .. "," .. args.y
+            .. ": " .. tostring(why))
+        return
+    end
+
+    sendServerCommand(DeadwireConfig.MODULE, "FenceElectrified", {
+        x = args.x, y = args.y, z = args.z, electrified = false,
+    })
+end
+
+-----------------------------------------------------------
 -- RequestWireSync: a joining client asks for the wire list
 --
 -- Replaces the Events.OnPlayerConnect hook that never existed (#33). The

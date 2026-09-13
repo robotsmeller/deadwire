@@ -18,6 +18,7 @@ local wireDisplayNames = {
     reinforced_tripline = "Reinforced Trip Line",
     bell_tripline       = "Bell Trip Line",
     tanglefoot          = "Tanglefoot",
+    electric_tripline   = "Electrified Deadwire",
 }
 
 -- Count how many kit items the player has
@@ -52,8 +53,12 @@ end
 -- nothing in that case, the same as vanilla.
 -----------------------------------------------------------
 
-local REMOVE_TIME     = 80
-local CAMOUFLAGE_TIME = 250
+local REMOVE_TIME       = 80
+local CAMOUFLAGE_TIME   = 250
+-- Stripping camo back off is quicker than applying it: you are pulling grass
+-- off a wire you already know the position of, not hiding one.
+local UNCAMOUFLAGE_TIME = 100
+local FENCE_WIRE_TIME   = 300
 
 local function queueWireAction(character, x, y, z, command, maxTime)
     local sq = getCell():getGridSquare(x, y, z)
@@ -73,6 +78,20 @@ end
 -- Sprint 4; the server applies full durability for free today.
 local function onCamouflageWire(worldObjects, character, x, y, z)
     queueWireAction(character, x, y, z, "CamouflageWire", CAMOUFLAGE_TIME)
+end
+
+-- #56. Camouflage used to be one-way, so a wire you hid stayed hidden for the
+-- life of the save.
+local function onUncamouflageWire(worldObjects, character, x, y, z)
+    queueWireAction(character, x, y, z, "UncamouflageWire", UNCAMOUFLAGE_TIME)
+end
+
+local function onElectrifyFence(worldObjects, character, x, y, z)
+    queueWireAction(character, x, y, z, "ElectrifyFence", FENCE_WIRE_TIME)
+end
+
+local function onDeElectrifyFence(worldObjects, character, x, y, z)
+    queueWireAction(character, x, y, z, "DeElectrifyFence", FENCE_WIRE_TIME)
 end
 
 -----------------------------------------------------------
@@ -111,19 +130,43 @@ local function onFillWorldObjectContextMenu(playerNum, context, worldObjects, te
             context:addOption("Remove " .. friendlyName,
                 worldObjects, onRemoveWire, character, x, y, z)
 
-            if DeadwireConfig.getSandbox("EnableCamouflage", true)
-                and not existingWire.camouflaged then
-                context:addOption("Camouflage " .. friendlyName,
-                    worldObjects, onCamouflageWire, character, x, y, z)
+            if DeadwireConfig.getSandbox("EnableCamouflage", true) then
+                if existingWire.camouflaged then
+                    -- The menu is also the only way to tell: the sprite looks
+                    -- identical camouflaged or not, so which of these two
+                    -- options is showing is the visual tell (#56).
+                    context:addOption("Uncover " .. friendlyName,
+                        worldObjects, onUncamouflageWire, character, x, y, z)
+                else
+                    context:addOption("Camouflage " .. friendlyName,
+                        worldObjects, onCamouflageWire, character, x, y, z)
+                end
             end
         end
     else
+        -- A fence on this square, and not one of ours, is the farmer's half
+        -- (#52). Offered before the placement submenu because a square that
+        -- holds a fence is not usually a square you also want a trip line on.
+        if DeadwireConfig.isTierEnabled(3) and DeadwireFences ~= nil then
+            local fence = DeadwireFences.findFence(square)
+            if fence then
+                if DeadwireFences.isElectrified(x, y, z) then
+                    context:addOption("Disconnect fence wiring",
+                        worldObjects, onDeElectrifyFence, character, x, y, z)
+                else
+                    context:addOption("Electrify this fence",
+                        worldObjects, onElectrifyFence, character, x, y, z)
+                end
+            end
+        end
+
         -- No wire: show placement submenu only if player has any kits
         local wireTypes = {
             { type = DeadwireConfig.WireTypes.TIN_CAN, label = "Tin Can Trip Line", tier = 0 },
             { type = DeadwireConfig.WireTypes.REINFORCED, label = "Reinforced Trip Line", tier = 1 },
             { type = DeadwireConfig.WireTypes.BELL, label = "Bell Trip Line", tier = 1 },
             { type = DeadwireConfig.WireTypes.TANGLEFOOT, label = "Tanglefoot", tier = 1 },
+            { type = DeadwireConfig.WireTypes.ELECTRIC, label = "Electrified Deadwire", tier = 3 },
         }
 
         -- Build list of placeable wire types (tier enabled + has kit in inventory)

@@ -73,5 +73,19 @@
     "Sandbox_Deadwire_SalvageMinPercent": "Minimum salvage from a destroyed wire (%)",
     "Sandbox_Deadwire_SalvageMinPercent_tooltip": "Lowest share of a destroyed wire's durable parts left on the tile. One roll per wire, between this and the maximum. Zero means the line can be a total loss. Cord is never returned: it is what snapped.",
     "Sandbox_Deadwire_SalvageMaxPercent": "Maximum salvage from a destroyed wire (%)",
-    "Sandbox_Deadwire_SalvageMaxPercent_tooltip": "Highest share of a destroyed wire's durable parts left on the tile. Set below 100 so that taking a wire back up by hand, which always returns the whole kit, stays the better option."
+    "Sandbox_Deadwire_SalvageMaxPercent_tooltip": "Highest share of a destroyed wire's durable parts left on the tile. Set below 100 so that taking a wire back up by hand, which always returns the whole kit, stays the better option.",
+    "Sandbox_Deadwire_EnableTier3": "Enable Tier 3 (electrified)",
+    "Sandbox_Deadwire_EnableTier3_tooltip": "Electrified deadwire and electrified fences. Both need a powered square nearby, from the grid or a generator.",
+    "Sandbox_Deadwire_ShockPlayerDamage": "Shock damage to players",
+    "Sandbox_Deadwire_ShockPlayerDamage_tooltip": "Damage to one leg or foot when a player touches a live wire or fence. 0 disables the damage but not the knockback.",
+    "Sandbox_Deadwire_ShockPanic": "Shock panic",
+    "Sandbox_Deadwire_ShockPanic_tooltip": "How badly a shock rattles a player. Panic fades on its own, so a larger number lasts longer as well as hitting harder. 0 disables it.",
+    "Sandbox_Deadwire_ShockZombieKillChance": "Chance a shock kills a zombie",
+    "Sandbox_Deadwire_ShockZombieKillChance_tooltip": "Percent chance a shocked zombie dies outright. It is knocked down otherwise.",
+    "Sandbox_Deadwire_FencePulseChance": "Fence pulse chance",
+    "Sandbox_Deadwire_FencePulseChance_tooltip": "An energiser pulses on a clock rather than on contact, so this is the chance something touching the fence was touching it when the pulse arrived.",
+    "Sandbox_Deadwire_FenceBreakChance": "Chance fence wiring burns out",
+    "Sandbox_Deadwire_FenceBreakChance_tooltip": "Percent chance a pulse that hits something also burns out the wiring, which has to be reconnected. The fence itself is never destroyed.",
+    "Sandbox_Deadwire_ElectricPowerDraw": "Power draw per electrified run",
+    "Sandbox_Deadwire_ElectricPowerDraw_tooltip": "Added to a generator's load, so an electrified perimeter burns fuel like any other appliance."
 }

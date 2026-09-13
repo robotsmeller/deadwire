@@ -2,5 +2,6 @@
     "Base.Deadwire_TinCanTripLineKit": "Tin Can Trip Line Kit",
     "Base.Deadwire_ReinforcedTripLineKit": "Reinforced Trip Line Kit",
     "Base.Deadwire_BellTripLineKit": "Bell Trip Line Kit",
-    "Base.Deadwire_TanglefootKit": "Tanglefoot Kit"
+    "Base.Deadwire_TanglefootKit": "Tanglefoot Kit",
+    "Base.Deadwire_ElectricTripLineKit": "Electrified Deadwire Kit"
 }

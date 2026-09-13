@@ -18,7 +18,11 @@ DeadwireConfig.WireTypes = {
     BELL          = "bell_tripline",
     TANGLEFOOT    = "tanglefoot",
     PULL_ALARM    = "pull_alarm",
-    ELECTRIC      = "electric_fence",
+    -- Tier 3a (#13) is the survivalist's half: a reinforced trip line with
+    -- current in it. Named for what it is. The farmer's half (#52) is not a
+    -- wire type at all -- it is a flag hung on a fence the game already built,
+    -- so it never appears in this table.
+    ELECTRIC      = "electric_tripline",
     ELECTRIC_BARBED = "electric_barbed",
 }
 
@@ -29,7 +33,7 @@ DeadwireConfig.Tiers = {
     [0] = { "tin_can_tripline" },
     [1] = { "reinforced_tripline", "bell_tripline", "tanglefoot" },
     [2] = { "pull_alarm" },
-    [3] = { "electric_fence" },
+    [3] = { "electric_tripline" },
     [4] = { "electric_barbed" },
 }
 
@@ -85,6 +89,19 @@ DeadwireConfig.WireDefaults = {
         cooldownSeconds = 0,    -- no cooldown: every zombie entering gets a roll
         tier = 1,
     },
+    -- Tier 3a (#13). Same shape as reinforced, because that is what it is when
+    -- the power is off: a trip line you cross, not a barrier. The sound radius
+    -- is deliberately the SMALLEST of the trip lines. A survivalist's wire is
+    -- meant not to be found, and a loud one defeats it -- the opposite of the
+    -- bell, and the opposite of the fence in #52.
+    electric_tripline = {
+        health = 150,
+        soundRadius = 20,
+        soundVolume = 50,
+        breakOnTrigger = false,
+        cooldownSeconds = 12,   -- a live wire re-arms far quicker than a bell
+        tier = 3,
+    },
 }
 
 -----------------------------------------------------------
@@ -102,6 +119,7 @@ DeadwireConfig.WireDefaults = {
 -----------------------------------------------------------
 DeadwireConfig.Sprites = {
     bell_tripline       = { north = "deadwire_01_1", east = "deadwire_01_0" },
+    electric_tripline   = { north = "deadwire_01_3", east = "deadwire_01_2" },
     reinforced_tripline = { north = "deadwire_01_5", east = "deadwire_01_4" },
     tanglefoot          = { north = "deadwire_01_7", east = "deadwire_01_6" },
     tin_can_tripline    = { north = "deadwire_01_9", east = "deadwire_01_8" },
@@ -123,6 +141,7 @@ DeadwireConfig.KitItems = {
     reinforced_tripline = "Base.Deadwire_ReinforcedTripLineKit",
     bell_tripline       = "Base.Deadwire_BellTripLineKit",
     tanglefoot          = "Base.Deadwire_TanglefootKit",
+    electric_tripline   = "Base.Deadwire_ElectricTripLineKit",
 }
 
 -----------------------------------------------------------

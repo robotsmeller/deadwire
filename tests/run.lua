@@ -31,6 +31,8 @@ dofile("tests/runner.lua")
 -- Order matters and mirrors the game's: shared, then client, then server.
 require "Deadwire/Config"
 require "Deadwire/WireNetwork"
+require "Deadwire/Power"          -- square:haveElectricity, per-circuit
+require "Deadwire/Shock"          -- what a live wire does to a body
 require "Deadwire/Detection"      -- registers Events.OnZombieUpdate / OnPlayerUpdate
 require "Deadwire/ClientCommands" -- sendClientCommand wrappers
 require "Deadwire/WireActions"    -- ISDeadwireWireAction, derives at file scope
@@ -43,6 +45,7 @@ require "Deadwire/ServerCommands" -- registers Events.OnClientCommand
 require "Deadwire/BuildActions"   -- ISDeadwireTripLine, the real placement path
 require "Deadwire/CamoDegradation" -- registers Events.EveryTenMinutes
 require "Deadwire/LootDistribution" -- registers Events.OnPreDistributionMerge
+require "Deadwire/FenceElectrification" -- registers Events.OnTick, the fence pulse
 
 -- Run test files
 dofile("tests/test_config.lua")
@@ -59,6 +62,7 @@ dofile("tests/test_camo_degradation.lua")
 dofile("tests/test_loot_distribution.lua")
 dofile("tests/test_event_handlers.lua")
 dofile("tests/test_salvage.lua")
+dofile("tests/test_electric.lua")
 
 -- Print final results (exits with code 1 if any failures)
 results()
