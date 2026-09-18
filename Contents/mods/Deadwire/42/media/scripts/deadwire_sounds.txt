@@ -1,10 +1,9 @@
-// Every sound block the game ships is wrapped in a module: all 150 vanilla
-// sound scripts in 42.20 do it, without exception. Ours declared `sound` at
-// file scope instead, which is the one structural difference between our
-// silent sounds and the only working examples available to measure against.
-// No other mod installed here ships a sound script, so vanilla is the whole
-// comparison set. Unverified in game as of this edit -- Part H of
-// docs/TEST-PLAN.md is the check that decides it.
+/* Block comments only. ScriptParser.stripComments removes slash-star pairs
+   and nothing else, so a double-slash line is left in as text and becomes
+   part of the next block's header. A header that starts with anything but
+   `module` is skipped whole, with no error: that is why all four sounds
+   were nil in Part H, session 29. The module wrapper matches all 150
+   vanilla sound scripts. verify_names.py refuses a double-slash here. */
 module Base
 {
     sound Deadwire_TinCanRattle
@@ -40,10 +39,10 @@ module Base
         }
     }
 
-    // Phase 3 (#13). The clip is here now so the sound name resolves; the wire
-    // type that plays it does not exist yet. EventHandlers' ElectricZap handler
-    // already names it, and without this block it would have played nothing at
-    // all, silently, on the day #13 landed.
+    /* Phase 3 (#13). The clip is here now so the sound name resolves; the wire
+       type that plays it does not exist yet. EventHandlers' ElectricZap handler
+       already names it, and without this block it would have played nothing at
+       all, silently, on the day #13 landed. */
     sound Deadwire_ElecZap
     {
         category = Item,

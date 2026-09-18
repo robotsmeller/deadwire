@@ -320,8 +320,18 @@ def check_scripts(rep, jar, items):
     for path in script_files():
         with open(path, encoding="utf-8", errors="replace") as fh:
             src = fh.read()
-        code = re.sub(r"//[^\n]*", "", src)
         where = rel(path)
+        # Strip exactly what ScriptParser.stripComments strips: /* */ and
+        # nothing else. A // line is left in as text and becomes part of the
+        # next block's header, so the game skips that whole block without a
+        # word. Stripping // here, as this once did, checked a file the game
+        # never reads. All four sounds and the electric recipe, session 29.
+        code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+        for n, line in enumerate(code.split("\n"), 1):
+            if "//" in line:
+                rep.bad("script comment", "//", "%s line %d" % (where, n),
+                        "the game only strips /* */; this line hides the "
+                        "block after it")
 
         for name in set(ITEM_RE.findall(code)):
             rep.check("item", "Base." + name,

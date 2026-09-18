@@ -57,10 +57,10 @@ module Base
         }
     }
 
-    // Tier 3a (#13). Electricity on top of the Trapping gate the other trip
-    // lines ask for: the wire is a reinforced line, the dangerous part is the
-    // wiring. Perks.Electricity is confirmed present in 42.20; Perks.Carpentry
-    // is NOT (it is Woodwork, which displays as Carpentry).
+    /* Tier 3a (#13). Electricity on top of the Trapping gate the other trip
+       lines ask for: the wire is a reinforced line, the dangerous part is the
+       wiring. Perks.Electricity is confirmed present in 42.20; Perks.Carpentry
+       is NOT (it is Woodwork, which displays as Carpentry). */
     craftRecipe Deadwire_CraftElectricTripLine
     {
         time = 300,

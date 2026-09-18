@@ -3,415 +3,153 @@
 ```yaml
 project: Deadwire
 description: PZ mod — perimeter trip lines and electric fencing for Project Zomboid (B42+)
-last_session: 28
-last_updated: 2026-09-13
-continue_with: "IN-GAME TESTING, and only that. Session 28 built a lot and verified none of it in a running game. Work docs/TEST-PLAN.md Parts H through L in order: H audio (#49), I crossing vs walking beside (#55), J the electrified deadwire (#13), K the electrified fence (#52, and K5 is the one that could still sink its design), L uncovering camouflage (#56). Then Parts C-G, which have never been run at all (#25)."
-blockers: "Nothing blocks the testing. #27 (bell vs reinforced are stat-identical) and #45 (wire damage and spans) still need a decision from Rob and nothing else. The Workshop upload needs Rob at the Steam uploader; workshop.txt, preview.png and the poster are all in place now."
+last_session: 29
+last_updated: 2026-09-17
+continue_with: "Rob decides on the posts-and-line redesign (#58). If yes, the first job is a one-session spike: draw one test line between two world points and have Rob look at it at two zoom levels and behind a wall. If no, finish testing: docs/TEST-PLAN.md Parts J, K, L (electric wire, electric fence, uncover camo), then C-G (#25)."
+blockers: "#58 needs Rob's yes/no before any more visual or placement work, because it would replace the sprite model outright. #27 and #45 still need his decision too, and #58 answers most of #45."
 ```
 
 ## To Resume
 
 ```
-Deadwire v0.1.1, Session 29. Start from origin/main. Tree clean, 7 issues open.
+Deadwire v0.1.1, Session 30. Start from origin/main. 9 issues open.
 
-Session 28 was a BUILD session and nothing in it has been watched running.
-Five issues closed on green tests alone, which per Rule 12 is not evidence.
-The single job of session 29 is to look at it in a game.
+Session 29 was the first testing session and it changed direction. The mod
+WORKS: sound, crossing vs walking beside, diagonal crossing, stand-still, all
+confirmed live. But Rob judged the UX weak -- too many visual glitches and
+workarounds -- and asked for a better model. My recommendation, written up in
+full on #58: posts centred on tiles plus a coloured line we draw ourselves,
+owner-visible, crossing detected as segment geometry. Nothing is built.
 
-What landed, all merged to main in PR #57:
+FIRST: ask Rob whether #58 goes ahead. Do not start the rewrite without a
+yes. The spike (one test line drawn in-world) comes before the rewrite.
 
-- Wires now fire on the EDGE they were crossed, not the tile they sit on
-  (#55). Walking the length of your own perimeter no longer sets off every
-  wire in it. Two behaviour changes fall out of this: standing still on a
-  wire no longer re-triggers it, and entities carry three more modData keys.
-- Circuit adjacency (#53): a run is a connected component over orthogonally
-  adjacent tiles, recomputed whole at place and remove time.
-- Electrified deadwire (#13) and electrified fencing (#52). One power call,
-  square:haveElectricity(), paired with AllowExteriorGenerator outdoors.
-  There is NO separate energiser object: a run is live if any tile of it
-  stands on a powered square. That was a deliberate scope call, logged in
-  .claude/afk-log.md, and it is reversible -- the power question is isolated
-  behind DeadwirePower.isCircuitLive.
-- Camouflage can be undone (#56), and which menu option shows is the only
-  visual tell there is.
-- Workshop packaging: poster.png (generated, placeholder), workshop.txt,
-  preview.png. mod.info had pointed at a poster that never existed.
-- Audio (#49): the sound script declared its blocks at file scope. All 150
-  vanilla sound scripts wrap them in `module Base { }`. Fixed, NOT verified,
-  issue deliberately left open.
+Small and independent of #58: #59, the alarm goes quiet for 36s after one
+trip. Split the sound gap (~2s) from the effect cooldown.
 
 TALK TO ROB IN PLAIN WORDS, no issue numbers, no labels only we understand.
 
-HARNESS: cd c:/xampp/htdocs/pz-test-pilot, scripts/cmd.py get_status.
-loadstring is off so run_lua always throws. cmd.py can't pass a real JSON
-array through args=; call _ipc.send_command from a short Python script for a
-list. teleportTo(x,y,z) is a real, verified IsoGameCharacter method.
+HARNESS: cd c:/xampp/htdocs/pz-test-pilot, python scripts/cmd.py get_status.
+"harness_dead / heartbeat stale" means the game is paused or unfocused, not
+crashed -- ask Rob to click back in. The PumpsHavePropane-transplant stack
+trace on right-click is that mod's, not ours. set_sandbox_var sets the Lua
+SandboxVars table and takes effect live (LogWireTriggers=true is how trip
+events get into console.txt). Setup probes for Parts J/K are in the Session
+28 notes in git history (6beae16).
 
-`deadwire_probe_setup` (step=teleport, then step=build) teleports to a fixed
-outdoor site (8504,9414,0) and builds a real activated generator + StickFence.
-A generator left running for days burns its tank dry; remove_object + rebuild
-before trusting a power reading, and advance_time past ElecShutModifier
-BEFORE building, not after.
-
-NEW in session 28:
-  `deadwire_probe_audio  step=check`   is the sound registered at all
-  `deadwire_probe_audio  step=play`    play it three ways, say which you heard
-  `deadwire_probe_electric step=report` READ-ONLY power readings, run first
-  `deadwire_probe_electric step=wires`  lay a four-tile electric run
-  `deadwire_probe_electric step=fence`  electrify the StickFence
-  `deadwire_probe_electric step=cross`  position for the crossing test
-
-Gates: run_tests.bat 398 pass over 17 files, verify_names.py 392 refs,
-validate_pack.py 130 checks. PowerShell, not Git Bash.
+Gates: run_tests.bat 398 pass (PowerShell: cmd /c .\run_tests.bat),
+verify_names.py all resolve, validate_pack.py 130 checks.
 ```
 
 ## How PZ actually loads and routes mod Lua
 
-Read from bytecode in Session 20. Half of Sessions 20 and 21 only make sense
-with these, and every guard written before them was written blind.
-
-0. **In single player, `isServer()` and `isClient()` are BOTH false.**
-   `isServer()` is true only on a dedicated server. The guard for "the
-   authoritative side" is `if isClient() then return end`, which runs in single
-   player and on the dedicated server. Getting this backwards meant no Deadwire
-   loot ever spawned in any single-player game, silently, for the mod's whole
-   life (Session 18).
-1. **A game client runs `shared/`, `client/` AND `server/` Lua.** `GameWindow`
-   loads shared and client at boot; `GameLoadingState` loads `server` whenever a
-   world loads. `server/` does not mean "server only". It means "loaded last".
-2. **A dedicated server runs `shared/` and `server/` only.** `GameServer` calls
-   `LoadDirBase("client", true)`, which checksums without executing. No
-   `client/` code of ours can ever run there.
-3. **`sendServerCommand` does nothing except on a real dedicated server.** Both
-   overloads are `if (GameServer.server) ...; return;`. Everything in
-   `client/EventHandlers.lua` is dead in single player; the mod works there only
-   because both halves share one `tileIndex` in memory.
-4. **`sendClientCommand` in single player is asynchronous**, arriving on the
-   next net pass, not the same frame.
-5. **In multiplayer the server rebuilds the build object from scratch.**
-   `BuildAction.parse` reads the class name from the metatable and calls
-   `<Type>:new(...)` with values harvested **by parameter name**. Only String,
-   Double, Boolean, table, InventoryItem, IsoDirections and IsoDeadBody survive.
-   An IsoPlayer argument is silently dropped, which was #32.
-
-Corollary: **`server/` is the wrong place to put a guard.** If a file must not
-run on a multiplayer client, write `if isClient() then return end` inside it.
+0. **In single player, `isServer()` and `isClient()` are BOTH false.** The
+   authoritative-side guard is `if isClient() then return end`.
+1. **A game client runs `shared/`, `client/` AND `server/` Lua.** `server/`
+   means "loaded last", not "server only".
+2. **A dedicated server runs `shared/` and `server/` only.**
+3. **`sendServerCommand` does nothing except on a real dedicated server.**
+4. **`sendClientCommand` in single player is asynchronous.**
+5. **In multiplayer the server rebuilds the build object from scratch** via
+   `BuildAction.parse`, by parameter name. IsoPlayer args are dropped (#32).
+6. **Script files (`media/scripts/*.txt`) only strip `/* */` comments.**
+   `ScriptParser.stripComments`, read from the 42.20 jar in Session 29. A `//`
+   line stays as text and becomes the next block's header, and a block whose
+   header is not `module` is skipped with no error. This silenced every sound
+   and hid the electric recipe. verify_names.py now refuses `//` in scripts.
 
 ## What is actually verified in a running game
 
-Session 18, in a real 42.20 game: harness IPC, item display names, all 4 kits
-spawning, all 4 recipes registered and translated, item and crafting categories
-resolving, `SandboxVars.Deadwire` via `getSandbox`, loot injection at **11/11
-tables, chance 12**, and all 10 sprites as distinct 64x128 textures. Session 23
-added Parts A and B of `docs/TEST-PLAN.md`, 24/24, including `createWire`'s real
-path. Parts C to G are still unrun and are the list of what that leaves.
+Session 18: IPC, item names, kits, recipes, categories, sandbox vars, loot
+injection, sprites. Session 23: TEST-PLAN Parts A and B. Session 29: Part H
+(all four sounds register and play; tin can rattle heard on a real crossing)
+and Part I1-I5 (beside = silent, across both ways fires, standing still fires
+once, diagonal fires both posts). NOT yet seen: the electric recipe in the
+crafting menu, Parts C-G, J, K, L, and I6 (old saves).
 
 ## Sprites
 
-Art is finished. What remains here is only what breaks if you touch it.
+**Index hazard:** `pz_tilesheet.py` globs `deadwire_*.png` alphabetically and
+`DeadwireConfig.Sprites` holds the indices by hand: 0/1 bell, 2/3 electric,
+4/5 reinforced, 6/7 tanglefoot, 8/9 tincan. Geometry (Session 26): an edge
+sprite occupies one 32px tile edge, bottom-anchored on the ground diamond;
+`tools/fix_sprite_geometry.py` re-seats art, never hand-edit. All of this is
+moot if #58 lands.
 
-**Index hazard:** `pz_tilesheet.py` globs `deadwire_*.png` alphabetically, and
-`DeadwireConfig.Sprites` holds those indices by hand. A new sprite that sorts
-earlier renumbers everything after it, silently.
+## Name verification
 
-```
-0/1 bell      2/3 electric (in use since Session 28, #13)
-4/5 reinforced   6/7 tanglefoot   8/9 tincan
-```
+`python scripts/verify_names.py` (exit 0 = everything resolves) checks perks,
+items, distributions, icons, sprites, sandbox options both ways, translation
+filenames, events, sounds, Java method arity, and now `//` in script files.
+DOES NOT EXIST: `Perks.Foraging` (`PlantScavenging`), `Perks.Carpentry`
+(`Woodwork`), `Capability.CanBuildAnywhere`, the `Climate` global,
+`getRainStrength`, `Base.TreeBranch`, `Events.OnPlayerConnect`,
+`sprite:getTextureCount()`. No electrocution system in the jar.
 
-**Geometry, corrected Session 26 (#51):** an edge sprite occupies ONE 32px
-tile edge, not the full 64px cell width, and sits bottom-anchored on the tile
-ground diamond -- N(32,96) E(64,112) S(32,128) W(0,112) in a 64x128 cell,
-derived from Tiles1x.floor.pack, not from our own prior art. North-facing art
-descends left to right into x 30..62; west-facing ascends into x 1..33; both
-baseline y=110, matching fencing_01_5/_4 exactly. The old target ("spans the
-full 64px, bottom at y=96") was measured from our own sprites and agreed with
-itself, which is how a wire ended up floating above and across the whole tile,
-covering a character next door.
+## B42 Mod Structure
 
-Facings were also swapped: every _n file held ascending (west-shaped) art and
-every _e file held descending (north-shaped) art, so a north-edge wire drew
-the west sprite. tools/fix_sprite_geometry.py re-seats and re-swaps existing
-art and refuses to write if a file measured slope disagrees with its name --
-run it, do not hand-edit the PNGs. Sprites are now half their old width;
-detail was traded away because the source renders were not kept, so a
-faithful redraw needs a new render pass, not a fix to this pipeline.
-tools/process_sprite_render.py carries the corrected target and prompt.
-
-**The `.tiles` file:** `42/media/deadwire_01.tiles` is what the game loads;
-there is no `.tiles.txt` any more, the game never opened it. The fifth
-per-tileset field is the **tileset number**, bounded 1..512 by
-`LoadTileDefinitions`, NOT the mod.info tiledef id whose range is 100..8190.
-`tools/pz-tilesheet` used to write the tiledef id there, so a future id above
-512 would have made the game refuse the file and every world sprite vanish with
-no error. Fixed to write 1; our shipped file says 200, legal and loads.
-
-## Name verification: run the script, do not check by hand
-
-```bash
-python scripts/verify_names.py          # exit 0 = everything resolves
-```
-
-Resolves **322** references against the installed 42.20.4: perks, capabilities,
-body parts, `Base.X` items, distributions, icon PNGs, sprite names, sandbox
-options **in both directions**, translation filenames, category and page label
-keys, the tiledef id range, event and sound names, the binary `.tiles` header,
-and Java method existence and arity. `scripts/pzclass.py` is the `.class` reader
-underneath and walks the superclass chain.
-
-`--update-events` regenerates `tests/pz_events.lua`, the allow-list
-`tests/stubs.lua` uses to refuse an event name the game does not have. The gate
-fails if that committed copy drifts from the jar.
-
-The script proves what exists. The traps live here. DOES NOT EXIST:
-`Perks.Foraging` (it is `PlantScavenging`), `Perks.Carpentry` (`Woodwork`),
-`Capability.CanBuildAnywhere` (`UseBuildCheat`), the `Climate` global
-(`getClimateManager()`), `getRainStrength` (`getRainIntensity`),
-`Base.TreeBranch` (`TreeBranch2`), `Events.OnPlayerConnect`, any church
-distribution, `sprite:getTextureCount()`, and `getTextOrNull` for recipe display
-names. There is **no electrocution system anywhere in the jar.**
-
-**Internal name ≠ displayed name.** `Woodwork` displays as "Carpentry",
-`PlantScavenging` as "Foraging".
-
-## B42 Mod Structure (REQUIRED)
-
-`mod.info` at root of the mod AND in `42/`, both must match. `common/` must
-exist even if empty. `poster=42/poster.png`. `sandbox-options.txt` in
-`42/media/`.
-
-**Translations (42.15+) are JSON with NO `_EN` suffix** — the `EN/` directory
-already says the language. `zombie/core/Translator$1` holds a fixed list of base
-names; a file outside it is never opened, with no error. verify_names now reads
-that list from the jar rather than remembering it. Categories need
-`IGUI_ItemCat_X` and `IGUI_CraftingCategories_X` in `IG_UI.json`; the sandbox
-page label needs `Sandbox_<page>` in `Sandbox.json`.
+`mod.info` at root AND in `42/`. `common/` must exist. `poster=42/poster.png`.
+`sandbox-options.txt` in `42/media/`. Translations are JSON with NO `_EN`
+suffix, from the fixed list in `Translator$1`.
 
 ## Key Rules
 
-1. **Privacy First**: no PII or credentials in commits
-2. **GitHub Issues**: all tasks tracked in Issues
-3. **Multiplayer First**: server-authoritative
-4. **Test In-Game**: provide clear test steps
-5. **Module Base** for all items; namespace tags `deadwire:tagname`
-6. **Detection is CLIENT-side**: OnZombieUpdate/OnPlayerUpdate are client events
-7. **No guards around unverified API names.** A guard around a typo is
-   indistinguishable from a guard around a real fallback. Cost three dead
-   features (Session 16) and one invisible fallback sprite (#39).
-8. **A missing name logs loudly.** Never substitute a default for it.
-9. **A checker must derive, not remember.** Four checkers have now blessed bugs
-   by agreeing with a hardcoded value nobody rechecked. A checker that supplies
-   whatever it is asked for cannot detect an absence.
-10. **`server/` is a load-order directory, not a guard** (see run modes above).
-11. **Validate the reported thing, not the reporter.** The trigger gate checked
-    how far away the reporting player was, when the question was where the
-    zombie is. Re-derive from world state server-side (#31).
-12. **Green tests are not evidence.** Put the bug back and confirm they fail.
-    Every fix in Sessions 21 and 22 was checked that way, and two of the checks
-    that looked fine did not bite until the mutation was made faithful.
-13. **Dead code is still somewhere things live.** "Nothing calls it" is a
-    complete answer to the wrong question. Deleting the uncalled `PlaceWire`
-    handler also deleted the only reader of `WireMaxPerPlayer` and
-    `LogWirePlacements`. Before deleting a path, ask what it is the only place
-    for. verify_names caught this one; it will not always be there.
+1. Privacy first. 2. All tasks in GitHub Issues. 3. Multiplayer first.
+4. Test in game. 5. `module Base`, tags `deadwire:tagname`. 6. Detection is
+client-side. 7. No guards around unverified API names. 8. A missing name logs
+loudly. 9. **A checker must derive, not remember** -- verify_names stripped
+`//` as a comment, so it checked a file the game never reads (Session 29).
+10. `server/` is load order, not a guard. 11. Validate the reported thing,
+not the reporter. 12. **Green tests are not evidence**; put the bug back.
+13. Dead code is still somewhere things live.
 
 ## Architecture
 
 Shared (WireNetwork, Config) → Client (Detection, UI, WireActions,
 TriggerHandlers, CamoVisibility, EventHandlers) → Server (ServerCommands,
-WireManager, BuildActions, LootDistribution, CamoDegradation). Client
-`sendClientCommand`, server validates, `sendServerCommand` broadcasts.
-`ISBuildingObject:derive()` files MUST live in `server/`. Cooldowns are **real
-seconds** (`os.time`), broadcast as a *duration* because clocks are
-independently skewed, and declared per wire type with no fallback.
+WireManager, BuildActions, LootDistribution, CamoDegradation). Cooldowns are
+real seconds (`os.time`), per wire type, no fallback. Placement is
+`ISDeadwireTripLine` only.
 
-Placement is `ISDeadwireTripLine` only; there is no PlaceWire command. Acting on
-a placed wire goes through `luautils.walkAdj` plus `ISDeadwireWireAction`, so
-the player is standing next to it when the server's four-tile bound is checked.
+## Open Issues (9)
 
-## Gates
-
-All local, no CI. `run_tests.bat` compiles **all 17** mod `.lua` files
-(`tests/syntax_check.lua`) and stops there on failure, then runs the suite,
-**398 pass**. PowerShell, not Git Bash -- `cmd //c` fails on the path, not the
-tests. `python scripts/verify_names.py` **392 refs**. `python
-tools/validate_pack.py` **130 checks**.
-
-The syntax gate enumerates the tree rather than carrying a file list, and
-finding zero files is a failure, not a pass. It compiles without executing, so
-a file-scope call that throws at runtime gets past it; requiring all seventeen
-in `tests/run.lua` is what catches that.
-
-## Open Issues
-
-Seven open. #13, #52, #53, #55 and #56 all closed in Session 28 by PR #57 --
-on green tests, which is not the same as working, and Parts H-L of the test
-plan are what would make them real.
-
-- **Next, in game, and this is the whole job:** Parts H-L of
-  docs/TEST-PLAN.md cover everything Session 28 built. Then #49 the tin can
-  audio, #25 Parts C-G, #12 one real container sighting.
-- **Needs a decision from Rob:** #27 bell and reinforced are the same wire
-  with a different noise. #45 wire damage, spans, tanglefoot wear.
-- **Art:** #48 the owner/camo outline box is drawn off the object's engine
-  bounds rather than the sprite art, a separate draw path from the #51 fix.
-  tin_can_rattle.ogg needs mastering. The sprites themselves are still
-  placeholder-grade, and workshop.txt now asks Workshop users for help.
-- **Deliberately not done:** the electrified deadwire kit is craft-only and
-  is not in any loot table. Tier 3 gated behind Electricity 3 should not be
-  lying in a toolbox.
+- **Decision:** #58 posts-and-line redesign (recommended). #27 bell vs
+  reinforced. #45 damage and spans (mostly answered by #58).
+- **Bugs:** #59 alarm silent 36s after one trip. #60 rail draws over the
+  character. #48 outline floats -- Rob called it launch-blocking; #58
+  dissolves #48 and #60.
+- **Testing:** #25 Parts C-G. #12 one real container sighting.
+- **Enhancement:** #46 camouflage costs materials.
+- **Parked by Rob:** placement is one right-click per tile; folded into #58.
 
 ## Recent sessions
 
+### Session 29 (2026-09-17): first real test, and a change of direction
+
+Part H found all four sounds unregistered. The cause, read from the jar: the
+script parser strips only `/* */`, and last session's `//` comments swallowed
+the sound module and the electric recipe. My own goal from Session 28, and
+the checker had blessed it by stripping `//` itself. Fixed both files, made
+verify_names refuse `//` (mutation-checked), sound confirmed by ear. Part I
+passed live (five extra-looking trips traced to repositioning with a
+controlled single crossing). #49 closed. Rob then saw the floating outline
+and the rail over his legs, and said the alarm going quiet for 36 seconds
+defeats an early warning system. He asked for an audit and best practice.
+Found: every visual bug comes from drawing a line on a tile edge in an engine
+that only knows whole-tile objects. Recommended posts plus a self-drawn
+owner-visible line (engine support confirmed: `IsoUtils.XToScreen`,
+`SpriteRenderer.renderline`, foraging overlays; precedent 7 Days to Die fence
+posts). Filed #58, #59, #60.
+
 ### Session 28 (2026-09-13): built the whole electric tier, verified none of it
 
-Rob asked what was really blocking launch, then said to do everything
-possible out of game and stop when it was ready to test. Five issues closed,
-three commits, one PR merged, and not one line of it watched in a game.
+Edge-crossing detection (#55), circuit adjacency (#53), electrified wire (#13)
+and fence (#52) via `square:haveElectricity()` with no separate energiser,
+un-camouflage (#56), Workshop packaging. All merged in PR #57 on green tests.
+The `//` comments that broke sound and the electric recipe landed here.
 
-**The launch answer, which was smaller than expected.** Almost nothing
-technical was blocking. Two missing files stopped a Workshop upload:
-mod.info pointed at 42/poster.png, which had never existed, and there was no
-workshop.txt or preview image. Both made this session. The real risk was
-that a zombie tripping a wire had never been observed, but zombies and
-players share one detection function and the player half was confirmed in
-Session 27, so that is a look-once job rather than an unknown.
+### Session 27 (2026-09-10): live-verified the sprite geometry fix
 
-**#55 was the one that would have earned bad reviews.** Detection fired on
-tile occupancy, so a wire went off when you walked ALONG it. The facing was
-being thrown away the instant the object was built, even though the sprite
-and the IsoThumpable were both constructed from it. Now recorded, persisted,
-broadcast, and recovered off the object's own getNorth() for older saves. The
-edge convention that makes the arithmetic honest: the boundary between
-(x,y-1) and (x,y) is the NORTH edge of (x,y). Diagonals are credited to both
-components deliberately, because a wire dodgeable at 45 degrees would be
-worse than the bug.
-
-**The audio, diagnosed by measurement rather than by listening again.** Ruled
-out first, each with evidence: all four oggs are mono 44.1kHz peaking at full
-scale, so neither stereo nor silent; category = Item is the most-used
-category in the game's own scripts, 1521 blocks of it; is3D and clip.file are
-both real fields on GameSound and GameSoundClip in the 42.20 jar; and
-PlayWorldSound's 6-arg overload exists with the types we pass. What was left:
-all 150 vanilla sound scripts wrap their blocks in a module and ours did not.
-Rob offered to record louder sounds and the measurement is what said not to
-bother. Unverified, so #49 stays open.
-
-**Tier 3, both halves.** The power model is one call and deliberately nothing
-more, so any power mod that energises a square the vanilla way works for
-free. The scope call worth knowing: there is no separate energiser object. A
-run is live when any tile of it stands on a powered square. The design asks
-for a real energiser and that is the better shape, but it needs an item, a
-recipe, a sprite and a build action before one wire could be tested. The
-power question is isolated behind isCircuitLive, so adding it later changes
-which square gets asked and nothing else.
-
-For the fence, the register of live fences is kept in OUR GlobalModData
-rather than as modData on the fence object. #52 flagged foreign-object
-modData surviving a reload as load-bearing and unverified; keeping our own
-list turns that into a cosmetic unknown. Part K5 of the test plan is still
-the check that could sink it.
-
-**Two own goals worth keeping.** The direction tests failed on first run
-because the mock entities were seeded with an arrival history, which made the
-step under test a two-tile jump -- a test-harness bug wearing a code bug's
-clothes, and I nearly went looking in the wrong file. And I wrote "every
-other mod on this machine wraps its sound blocks in a module" into two files
-before checking; no other installed mod ships a sound script at all, so
-vanilla was the whole comparison set. Corrected both before committing.
-
-Eleven mutations confirmed biting across the two features, plus a no-op
-control that stayed green, which is the check that the suite is not failing
-for unrelated reasons.
-
-### Session 27 (2026-09-10): live-verified #51, found three bugs it was never going to fix
-
-Rob restarted PZ and looked. The harness (deadwire_smoke_b) placed one wire of
-each type at his feet rather than hand-building through the crafting menu --
-faster, and it exercises the same createWire path the real UI does.
-
-**Confirmed: plain sprites are fixed.** All four wire types sit on the ground
-along a tile edge, correct length, no longer floating over him as he walked
-past. First live confirmation since #51 landed in Session 26 -- the code fix
-alone was explicitly not counted as done until someone looked at it running.
-
-**Three real bugs, found looking rather than testing for them:**
-
-- The owner/camo glow outline (#48, already open) still floats exactly like
-  the old sprite bug, on wires whose plain sprite is now correct. Traced it:
-  CamoVisibility.lua's setOutline() calls obj:setOutlineHighlight(true), an
-  engine-drawn box keyed to the IsoObject's own collision bounds, not to the
-  sprite bitmap #51 fixed. Two unrelated draw paths sharing one symptom --
-  updated #48 with this, did not touch the code.
-- Trigger detection is direction-blind (#55, new). Reinforced knocks the
-  player back walking parallel to the wire, same as crossing it; tin can
-  breaks the same way. TriggerHandlers.lua only checks tile occupancy, no
-  comparison against the wire's own orientation.
-- Camouflage cannot be undone and carries no visual tell (#56, new).
-  WireActions.lua's isValid() refuses CamouflageWire once already camouflaged,
-  and no reverse command exists. The sprite looks identical camouflaged or not,
-  so the owner has no way to check whether it worked.
-
-One near-miss on the session's own method: my first read of "wires always sit
-on the top-left of the tile, never the right side" looked like a fourth bug.
-It was not -- deadwire_smoke_b hardcodes north=false for every placement, so
-all four test wires shared one facing. Caught before filing anything, but it
-is the same shape as the journal's stale-context trap: a tool's own
-convenience default read as a finding about the mod.
-
-A stack trace also showed in the console during testing -- checked and it is
-PumpsHavePropane-transplant throwing in its own OnContextMenu handler,
-nothing to do with Deadwire.
-
-Rob's call for next session: attempt a real art pass on the sprites (the
-geometry is now confirmed correct, so a redraw has something solid to sit on)
-rather than another fix to this pipeline.
-
-### Session 26 (2026-09-10): the wire sprite was drawn wrong, in two ways at once
-
-Rob asked whether #51 (wire draws over the character) had ever actually been
-fixed. It had not -- the issue body says it needs the tilesheet touched, not
-Lua, and nothing had touched the tilesheet.
-
-**Every sprite floated above and across its own tile.** A PZ tile sprite is a
-64x128 cell; the ground it occupies is a diamond in the bottom quarter,
-derived from measuring Tiles1x.floor.pack rather than assumed: every floor
-tile is a 63x32 image pasted at offset (0,96), giving N(32,96) E(64,112)
-S(32,128) W(0,112). Our art spanned the full 64px width and bottomed out at
-y=96 -- the edge of a diamond that does not exist on this engine. That target
-was written into tools/process_sprite_render.py and said outright it came
-from the sprites already in the mod, so the art was checked against itself
-and passed. Measured against vanilla instead: fencing_01_5 (WallN) occupies
-x 30..62, y 59..110, half the cell width, well inside the real diamond.
-
-**Second bug, found only because vanilla was measured to confirm the first.**
-Every _n (north) sprite file held art that ascends left to right, and every
-_e file held art that descends -- backwards. Vanilla's own WallN tiles
-(fencing_01_5/_17/_21) all descend; its WallW tiles (fencing_01_4/_16/_20)
-all ascend, six for six. So a wire built on a north edge has been drawing the
-west-shaped sprite for the mod's entire life.
-
-Ruled out along the way: draw ordering (IsoCell bytecode draws every object
-on a square before any character on it -- cannot explain covering a
-neighbour) and vanilla's WallN/WallW flags (they also set collideN/collideW,
-which would break zombie pass-through, the whole point of a trip wire).
-
-**Fix is tools/fix_sprite_geometry.py.** Halves each sprite (nearest
-neighbour, keeps the 2:1 diagonal, costs pixel detail -- accepted, since the
-source renders were never kept) and re-seats it on the correct edge, swapping
-art between _n/_e files where the measured slope disagrees with the filename.
-Refuses to write if a slope cannot be resolved. Rebuilt the pack and .tiles
-from tools/pz-tilesheet/pz_tilesheet.py, corrected the geometry target and
-Gemini prompt in process_sprite_render.py. 346 tests, 322 names, 130 pack
-checks, all green.
-
-**Not yet confirmed live.** Rob's call, made explicitly: ship with
-placeholder-grade art rather than block launch on a redraw, and ask Workshop
-users if anyone wants to help with better sprites. The geometry fix stands
-regardless of art quality, but nobody has stood next to a wire in-game since
-it landed -- that is the first thing next session does, and per Rule 12
-(green tests are not evidence) it does not count as done until someone has
-looked at it running.
-
-Sessions 25 (four Tier 3 unknowns answered live, two false power readings caught first) and 24 (eight dark files brought under test, Tier 3 designed and split) are in `.claude/archive/sessions.md`, along with 23.
-
+Plain sprites sit correctly on tile edges. Found three bugs by looking: the
+outline floats (#48), detection was direction-blind (#55), camouflage could
+not be undone (#56).
